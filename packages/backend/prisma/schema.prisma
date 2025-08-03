@@ -1,0 +1,205 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String?  // Optional for OAuth users
+  profileImage String?
+  role         String   @default("USER")
+  
+  // OAuth fields
+  googleId     String?  @unique
+  githubId     String?  @unique
+  
+  // Settings (JSON field)
+  settings     String   @default("{\"notifications\":{\"email\":true,\"push\":true},\"privacy\":{\"profilePublic\":true,\"projectsPublic\":true}}")
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  projects     Project[]
+  posts        CommunityPost[]
+  comments     Comment[]
+  votes        Vote[]
+  
+  @@map("users")
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  userId      String
+  name        String
+  description String
+  category    String
+  status      String        @default("DRAFT")
+  
+  // AI Model Configuration (JSON field)
+  aiModel     String?
+  
+  // Deployment Configuration (JSON field)
+  deployment  String?
+  
+  // Revenue Configuration (JSON field)
+  revenue     String?
+  
+  // Timestamps
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts       CommunityPost[]
+  
+  @@map("projects")
+}
+
+model Template {
+  id            String             @id @default(cuid())
+  name          String
+  description   String
+  category      String
+  difficulty    String
+  tags          String             // Array of strings stored as JSON
+  codeTemplate  String             // Large text field for code
+  aiModelType   String
+  previewImages String             // Array of strings stored as JSON
+  usageCount    Int                @default(0)
+  rating        Float              @default(0.0)
+  
+  // Timestamps
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  
+  @@map("templates")
+}
+
+model CommunityPost {
+  id        String          @id @default(cuid())
+  userId    String
+  projectId String?
+  type      String
+  title     String
+  content   String          // Large text field
+  tags      String   // Array of strings stored as JSON
+  votes     Int             @default(0)
+  
+  // Timestamps
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  
+  // Relations
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  comments  Comment[]
+  postVotes Vote[]
+  
+  @@map("community_posts")
+}
+
+model Comment {
+  id     String @id @default(cuid())
+  userId String
+  postId String
+  content String
+  votes  Int    @default(0)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post         CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  commentVotes Vote[]
+  
+  @@map("comments")
+}
+
+model Vote {
+  id        String    @id @default(cuid())
+  userId    String
+  postId    String?
+  commentId String?
+  value     Int       // 1 for upvote, -1 for downvote
+  
+  // Timestamps
+  createdAt DateTime  @default(now())
+  
+  // Relations
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      CommunityPost? @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment   Comment?       @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  
+  // Ensure user can only vote once per post/comment
+  @@unique([userId, postId])
+  @@unique([userId, commentId])
+  @@map("votes")
+}
+
+model SuccessStory {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  category    String
+  revenue     String   // Anonymous revenue data
+  metrics     String   // Performance metrics
+  tips        String   // Implementation tips stored as JSON
+  imageUrl    String?
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("success_stories")
+}
+
+model DeploymentLog {
+  id        String           @id @default(cuid())
+  projectId String
+  status    String
+  platform  String
+  logs      String           // Deployment logs
+  error     String?          // Error message if failed
+  
+  // Timestamps
+  createdAt DateTime         @default(now())
+  
+  @@map("deployment_logs")
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  keyHash     String   @unique
+  permissions String   // Array of permissions stored as JSON
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("api_keys")
+}
+
+// Note: SQLite doesn't support enums, so we use strings with validation in the application layer
+// Valid values:
+// UserRole: "USER", "ADMIN"
+// ProjectStatus: "DRAFT", "DEVELOPING", "DEPLOYED", "ARCHIVED"
+// TemplateDifficulty: "BEGINNER", "INTERMEDIATE", "ADVANCED"
+// CommunityPostType: "QUESTION", "SHOWCASE", "DISCUSSION"
+// DeploymentStatus: "PENDING", "IN_PROGRESS", "SUCCESS", "FAILED"
