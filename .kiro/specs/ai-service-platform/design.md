@@ -152,20 +152,62 @@ PUT /users/settings
 
 **API Endpoints**:
 ```
-GET /projects
-POST /projects
-GET /projects/{id}
-PUT /projects/{id}
-DELETE /projects/{id}
-POST /projects/{id}/ai-model
-GET /projects/{id}/status
+GET /api/projects
+POST /api/projects
+GET /api/projects/{id}
+PUT /api/projects/{id}
+DELETE /api/projects/{id}
+PUT /api/projects/{id}/page-content
+POST /api/projects/{id}/ai-model
+GET /api/projects/{id}/status
 ```
 
 **External Integrations**:
 - Teachable Machine API 연동
 - GitHub Codespaces API 연동
 
-### 4. Deployment Service
+### 4. Community Service
+
+**책임**: 커뮤니티 포럼 및 사용자 상호작용 관리
+
+**주요 기능**:
+- 게시글 및 댓글 관리
+- 투표 시스템
+- 태그 및 검색 기능
+- 트렌딩 콘텐츠 관리
+
+**API Endpoints**:
+```
+GET /api/community/posts
+POST /api/community/posts
+GET /api/community/posts/{id}
+PUT /api/community/posts/{id}
+DELETE /api/community/posts/{id}
+POST /api/community/posts/{id}/vote
+GET /api/community/posts/{postId}/comments
+POST /api/community/posts/{postId}/comments
+```
+
+### 5. Revenue Service
+
+**책임**: 수익화 및 AdSense 최적화 관리
+
+**주요 기능**:
+- AdSense 설정 관리
+- 수익 분석 및 리포팅
+- A/B 테스트 관리
+- 최적화 권장사항 제공
+
+**API Endpoints**:
+```
+GET /api/revenue/{projectId}/analytics
+GET /api/revenue/{projectId}/adsense
+PUT /api/revenue/{projectId}/adsense
+GET /api/revenue/{projectId}/optimization
+POST /api/revenue/{projectId}/ab-test
+```
+
+### 6. Deployment Service
 
 **책임**: 서비스 배포 및 호스팅 관리
 

@@ -167,22 +167,28 @@ ai-service-platform/
 │   ├── frontend/          # Next.js 프론트엔드
 │   │   ├── src/
 │   │   │   ├── components/    # 재사용 가능한 컴포넌트
+│   │   │   ├── hooks/         # 커스텀 React 훅
 │   │   │   ├── pages/         # Next.js 페이지
 │   │   │   ├── services/      # API 서비스
 │   │   │   ├── store/         # Redux 상태 관리
+│   │   │   ├── lib/           # 유틸리티 함수
 │   │   │   └── styles/        # 스타일 파일
 │   │   └── public/            # 정적 파일
 │   ├── backend/           # Express.js 백엔드
 │   │   ├── src/
 │   │   │   ├── controllers/   # API 컨트롤러
 │   │   │   ├── services/      # 비즈니스 로직
+│   │   │   ├── routes/        # API 라우트
 │   │   │   ├── middleware/    # Express 미들웨어
 │   │   │   ├── utils/         # 유틸리티 함수
 │   │   │   └── lib/           # 라이브러리 설정
 │   │   └── prisma/            # 데이터베이스 스키마
 │   └── shared/            # 공유 타입 및 유틸리티
 ├── docs/                  # 문서
-└── .kiro/                # 프로젝트 스펙 및 설계 문서
+├── .kiro/                # 프로젝트 스펙 및 설계 문서
+│   ├── specs/            # 기능 스펙 문서
+│   └── steering/         # AI 개발 가이드라인
+└── ChangeLog.md          # 변경 이력
 ```
 
 ## 📚 API 문서
@@ -248,11 +254,13 @@ docker-compose up -d
 
 ### 개발 가이드라인
 
-- TypeScript를 사용하여 타입 안정성 확보
-- ESLint 및 Prettier 규칙 준수
-- 컴포넌트는 재사용 가능하도록 설계
-- API는 RESTful 원칙 준수
-- 테스트 코드 작성 권장
+- **TypeScript 우선**: 전체 스택에서 타입 안정성 확보
+- **Steering Rules 준수**: `.kiro/steering/` 문서의 가이드라인 따름
+- **컴포넌트 재사용성**: 작고 재사용 가능한 컴포넌트 설계
+- **Hook 기반 로직**: 비즈니스 로직을 커스텀 훅으로 추상화
+- **API RESTful 설계**: 일관된 API 엔드포인트 구조
+- **의존성 주입**: TSyringe를 활용한 모듈화된 백엔드 구조
+- **테스트 주도 개발**: Jest를 활용한 단위 테스트 작성
 
 ## 📄 라이선스
 

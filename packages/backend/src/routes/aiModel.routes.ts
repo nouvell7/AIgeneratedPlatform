@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { container } from 'tsyringe';
-import { AIModelController } from '../controllers/ai-model.controller';
+import { AIModelController } from '../controllers/aiModel.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 
 const router = Router();

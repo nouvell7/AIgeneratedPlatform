@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { injectable, inject } from 'tsyringe';
-import { AIModelService } from '../services/ai-model.service';
+import { AIModelService } from '../services/aiModel.service';
 import { validateRequest, commonSchemas } from '../lib/validation';
 import { aiModelSchema as aiModelConfigSchema } from '@shared/schemas';
 import { z } from 'zod';

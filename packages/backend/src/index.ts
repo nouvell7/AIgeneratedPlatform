@@ -4,6 +4,14 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import projectRoutes from './routes/project.routes';
+import communityRoutes from './routes/community.routes';
+import revenueRoutes from './routes/revenue.routes';
+import codespacesRoutes from './routes/codespaces.routes';
+import templateRoutes from './routes/template.routes';
+import userRoutes from './routes/user.routes';
+import deploymentRoutes from './routes/deployment.routes';
+import aiModelRoutes from './routes/aiModel.routes';
+import successStoryRoutes from './routes/successStory.routes';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 
 // Load environment variables
@@ -35,6 +43,14 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/community', communityRoutes);
+app.use('/api/revenue', revenueRoutes);
+app.use('/api/codespaces', codespacesRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/deployment', deploymentRoutes);
+app.use('/api/ai-models', aiModelRoutes);
+app.use('/api/success-stories', successStoryRoutes);
 
 // Error handling
 app.use(notFoundHandler);

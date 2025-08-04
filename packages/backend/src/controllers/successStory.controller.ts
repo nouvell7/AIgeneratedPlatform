@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { injectable, inject } from 'tsyringe'; // tsyringe 임포트
-import { SuccessStoryService } from '../services/success-story.service';
+import { SuccessStoryService } from '../services/successStory.service';
 import { validateRequest, commonSchemas } from '../lib/validation';
 import { z } from 'zod';
 

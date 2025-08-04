@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { container } from 'tsyringe';
-import { SuccessStoryController } from '../controllers/success-story.controller';
+import { SuccessStoryController } from '../controllers/successStory.controller';
 
 const router = Router();
 const successStoryController = container.resolve(SuccessStoryController);
