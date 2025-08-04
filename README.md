@@ -127,6 +127,16 @@ AI Service Platform은 개발자들이 AI 모델을 쉽게 웹 애플리케이�
    ```
 
 4. **데이터베이스 설정**
+
+   기본적으로 개발 환경에서는 PostgreSQL을 사용하도록 설정되어 있습니다. 로컬에서 PostgreSQL을 사용하지 않고 SQLite로 간단하게 테스트하려면, `packages/backend/.env` 파일을 열어 `DATABASE_URL`을 다음과 같이 수정하세요.
+
+   ```env
+   # DATABASE_URL="postgresql://user:password@host:port/db"
+   DATABASE_URL="file:./dev.db"
+   ```
+
+   이제 다음 명령어를 실행하여 데이터베이스를 설정합니다.
+
    ```bash
    npm run db:generate
    npm run db:push
@@ -172,7 +182,6 @@ ai-service-platform/
 │   │   └── prisma/            # 데이터베이스 스키마
 │   └── shared/            # 공유 타입 및 유틸리티
 ├── docs/                  # 문서
-├── scripts/               # 빌드 및 배포 스크립트
 └── .kiro/                # 프로젝트 스펙 및 설계 문서
 ```
 
@@ -261,8 +270,7 @@ docker-compose up -d
 프로젝트에 대한 질문이나 제안사항이 있으시면 언제든 연락주세요:
 
 - 이슈 트래커: [GitHub Issues](https://github.com/yourusername/ai-service-platform/issues)
-- 이메일: your.email@example.com
-
+- 이메일: nouvell7@gmail.com
 ---
 
 ⭐ 이 프로젝트가 도움이 되셨다면 스타를 눌러주세요!

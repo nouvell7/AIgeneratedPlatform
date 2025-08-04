@@ -1,9 +1,13 @@
 import { Request, Response } from 'express';
-import { adsenseService } from '../services/adsense.service';
+import { injectable, inject } from 'tsyringe';
+import { AdSenseService } from '../services/adsense.service'; // Corrected import to class
 import { logger } from '../utils/logger';
 import { AppError } from '../utils/errors';
 
+@injectable()
 export class AdSenseController {
+  constructor(@inject(AdSenseService) private adsenseService: AdSenseService) {}
+
   /**
    * Connect AdSense account
    */
@@ -11,7 +15,7 @@ export class AdSenseController {
     try {
       const { projectId } = req.params;
       const { authCode } = req.body;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -25,7 +29,7 @@ export class AdSenseController {
         throw new AppError('Authorization code is required', 400);
       }
 
-      const account = await adsenseService.connectAdSenseAccount(projectId, userId, authCode);
+      const account = await this.adsenseService.connectAdSenseAccount(projectId, userId, authCode);
 
       res.status(201).json({
         success: true,
@@ -49,7 +53,7 @@ export class AdSenseController {
   async getAdSenseStatus(req: Request, res: Response) {
     try {
       const { projectId } = req.params;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -59,7 +63,7 @@ export class AdSenseController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const status = await adsenseService.getAdSenseStatus(projectId, userId);
+      const status = await this.adsenseService.getAdSenseStatus(projectId, userId);
 
       res.json({
         success: true,
@@ -84,7 +88,7 @@ export class AdSenseController {
     try {
       const { projectId } = req.params;
       const { name, type, size } = req.body;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -98,7 +102,7 @@ export class AdSenseController {
         throw new AppError('Name, type, and size are required', 400);
       }
 
-      const adUnit = await adsenseService.createAdUnit(projectId, userId, {
+      const adUnit = await this.adsenseService.createAdUnit(projectId, userId, {
         name,
         type,
         size,
@@ -127,7 +131,7 @@ export class AdSenseController {
     try {
       const { projectId } = req.params;
       const settings = req.body;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -137,7 +141,7 @@ export class AdSenseController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const config = await adsenseService.updateAdSenseSettings(projectId, userId, settings);
+      const config = await this.adsenseService.updateAdSenseSettings(projectId, userId, settings);
 
       res.json({
         success: true,
@@ -161,7 +165,7 @@ export class AdSenseController {
   async generateAdCode(req: Request, res: Response) {
     try {
       const { projectId, adUnitId } = req.params;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -171,7 +175,7 @@ export class AdSenseController {
         throw new AppError('Project ID and Ad Unit ID are required', 400);
       }
 
-      const adCode = await adsenseService.generateAdCode(projectId, userId, adUnitId);
+      const adCode = await this.adsenseService.generateAdCode(projectId, userId, adUnitId);
 
       res.json({
         success: true,
@@ -196,7 +200,7 @@ export class AdSenseController {
     try {
       const { projectId } = req.params;
       const { startDate, endDate } = req.query;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -210,7 +214,7 @@ export class AdSenseController {
       const defaultEndDate = new Date().toISOString().split('T')[0];
       const defaultStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-      const revenueData = await adsenseService.getRevenueData(projectId, userId, {
+      const revenueData = await this.adsenseService.getRevenueData(projectId, userId, {
         startDate: (startDate as string) || defaultStartDate,
         endDate: (endDate as string) || defaultEndDate,
       });
@@ -237,7 +241,7 @@ export class AdSenseController {
   async disconnectAdSenseAccount(req: Request, res: Response) {
     try {
       const { projectId } = req.params;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -247,7 +251,7 @@ export class AdSenseController {
         throw new AppError('Project ID is required', 400);
       }
 
-      await adsenseService.disconnectAdSenseAccount(projectId, userId);
+      await this.adsenseService.disconnectAdSenseAccount(projectId, userId);
 
       res.json({
         success: true,
@@ -271,7 +275,7 @@ export class AdSenseController {
   async getAdSenseOAuthUrl(req: Request, res: Response) {
     try {
       const { projectId } = req.params;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -312,5 +316,3 @@ export class AdSenseController {
     }
   }
 }
-
-export const adsenseController = new AdSenseController();

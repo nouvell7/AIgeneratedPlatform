@@ -1,22 +1,28 @@
 import { Router } from 'express';
+import { container } from 'tsyringe';
 import { ProjectController } from '../controllers/project.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 
 const router = Router();
-const projectController = new ProjectController();
+const projectController = container.resolve(ProjectController);
 
-// All project routes require authentication
-router.use(authMiddleware);
+router.get('/public', projectController.getPublicProjects);
+router.get('/categories', projectController.getCategories);
+router.get('/search', authMiddleware, projectController.searchProjects);
 
-// Project CRUD routes
-router.get('/', projectController.getProjects);
-router.post('/', projectController.createProject);
-router.get('/:id', projectController.getProject);
-router.put('/:id', projectController.updateProject);
-router.delete('/:id', projectController.deleteProject);
+router.post('/', authMiddleware, projectController.createProject);
+router.get('/', authMiddleware, projectController.getUserProjects);
 
-// Project sharing routes
-router.post('/:id/share', projectController.shareProject);
-router.get('/:id/share-status', projectController.getShareStatus);
+router.get('/:id', authMiddleware, projectController.getProject);
+router.put('/:id', authMiddleware, projectController.updateProject);
+router.delete('/:id', authMiddleware, projectController.deleteProject);
+
+// New route for updating page content
+router.put('/:id/page-content', authMiddleware, projectController.updatePageContent);
+
+router.post('/:id/duplicate', authMiddleware, projectController.duplicateProject);
+router.post('/:id/archive', authMiddleware, projectController.archiveProject);
+router.post('/:id/restore', authMiddleware, projectController.restoreProject);
+router.get('/:id/stats', authMiddleware, projectController.getProjectStats);
 
 export default router;

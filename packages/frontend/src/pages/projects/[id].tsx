@@ -6,8 +6,10 @@ import { useRouter } from 'next/router';
 import Layout from '@/components/layout/Layout';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import CodespaceStatus from '@/components/projects/CodespaceStatus';
+import NoCodeEditor from '@/components/projects/NoCodeEditor'; // Import NoCodeEditor
 import { useAppSelector, useAppDispatch } from '@/store';
 import { fetchProject, deleteProject } from '@/store/slices/projectSlice';
+import { updateProjectPageContent } from '@/services/api/projects'; // Import API function
 
 const ProjectDetailPage: NextPage = () => {
   const router = useRouter();
@@ -21,6 +23,13 @@ const ProjectDetailPage: NextPage = () => {
       dispatch(fetchProject(id));
     }
   }, [dispatch, id]);
+
+  const handleSavePageContent = async (content: Record<string, any>) => {
+    if (currentProject?.id) {
+      await updateProjectPageContent(currentProject.id, content);
+      dispatch(fetchProject(currentProject.id)); // Refresh project data
+    }
+  };
 
   const handleDeleteProject = async () => {
     if (currentProject) {
@@ -179,111 +188,121 @@ const ProjectDetailPage: NextPage = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-6">
-                {/* Development Environment */}
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Development Environment</h2>
-                  <CodespaceStatus
+                {currentProject.projectType === 'NO_CODE' ? (
+                  <NoCodeEditor
                     projectId={currentProject.id}
-                    onEnvironmentCreated={() => {
-                      // Refresh project data
-                      dispatch(fetchProject(currentProject.id));
-                    }}
+                    initialContent={currentProject.pageContent || {}}
+                    onSave={handleSavePageContent}
                   />
-                </div>
+                ) : (
+                  <>
+                    {/* Development Environment */}
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Development Environment</h2>
+                      <CodespaceStatus
+                        projectId={currentProject.id}
+                        onEnvironmentCreated={() => {
+                          // Refresh project data
+                          dispatch(fetchProject(currentProject.id));
+                        }}
+                      />
+                    </div>
 
-                {/* AI Model Configuration */}
-                <div className="card">
-                  <div className="card-header">
-                    <h2 className="text-lg font-semibold text-gray-900">AI Model Configuration</h2>
-                  </div>
-                  <div className="card-body">
-                    {currentProject.aiModel ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-600">Model Type:</span>
-                          <span className="text-sm text-gray-900">{(currentProject.aiModel as any).type || 'Teachable Machine'}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-600">Model URL:</span>
-                          <a
-                            href={(currentProject.aiModel as any).modelUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-primary-600 hover:text-primary-500 truncate max-w-xs"
-                          >
-                            {(currentProject.aiModel as any).modelUrl}
-                          </a>
-                        </div>
+                    {/* AI Model Configuration */}
+                    <div className="card">
+                      <div className="card-header">
+                        <h2 className="text-lg font-semibold text-gray-900">AI Model Configuration</h2>
                       </div>
-                    ) : (
-                      <div className="text-center py-6">
-                        <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                        <h3 className="text-sm font-medium text-gray-900 mb-2">No AI Model Configured</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          Add your Teachable Machine model to get started with AI predictions.
-                        </p>
-                        <Link
-                          href={`/projects/${currentProject.id}/edit`}
-                          className="btn-primary btn-sm"
-                        >
-                          Configure Model
-                        </Link>
+                      <div className="card-body">
+                        {currentProject.aiModel ? (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-600">Model Type:</span>
+                              <span className="text-sm text-gray-900">{(currentProject.aiModel as any).type || 'Teachable Machine'}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-600">Model URL:</span>
+                              <a
+                                href={(currentProject.aiModel as any).modelUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary-600 hover:text-primary-500 truncate max-w-xs"
+                              >
+                                {(currentProject.aiModel as any).modelUrl}
+                              </a>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center py-6">
+                            <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                            </svg>
+                            <h3 className="text-sm font-medium text-gray-900 mb-2">No AI Model Configured</h3>
+                            <p className="text-sm text-gray-600 mb-4">
+                              Add your Teachable Machine model to get started with AI predictions.
+                            </p>
+                            <Link
+                              href={`/projects/${currentProject.id}/edit`}
+                              className="btn-primary btn-sm"
+                            >
+                              Configure Model
+                            </Link>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
+                    </div>
 
-                {/* Deployment Status */}
-                <div className="card">
-                  <div className="card-header">
-                    <h2 className="text-lg font-semibold text-gray-900">Deployment Status</h2>
-                  </div>
-                  <div className="card-body">
-                    {currentProject.deployment && (currentProject.deployment as any).deploymentUrl ? (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-600">Status:</span>
-                          <span className="badge badge-success">Deployed</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-600">URL:</span>
-                          <a
-                            href={(currentProject.deployment as any).deploymentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-primary-600 hover:text-primary-500"
-                          >
-                            Visit Site
-                          </a>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-600">Last Deployed:</span>
-                          <span className="text-sm text-gray-900">
-                            {new Date((currentProject.deployment as any).lastDeployedAt || currentProject.updatedAt).toLocaleDateString()}
-                          </span>
-                        </div>
+                    {/* Deployment Status */}
+                    <div className="card">
+                      <div className="card-header">
+                        <h2 className="text-lg font-semibold text-gray-900">Deployment Status</h2>
                       </div>
-                    ) : (
-                      <div className="text-center py-6">
-                        <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <h3 className="text-sm font-medium text-gray-900 mb-2">Not Deployed</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          Deploy your AI service to make it available online.
-                        </p>
-                        <Link
-                          href={`/projects/${currentProject.id}/deploy`}
-                          className="btn-primary btn-sm"
-                        >
-                          Deploy Now
-                        </Link>
+                      <div className="card-body">
+                        {currentProject.deploymentConfig && (currentProject.deploymentConfig as any).deploymentUrl ? (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-600">Status:</span>
+                              <span className="badge badge-success">Deployed</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-600">URL:</span>
+                              <a
+                                href={(currentProject.deploymentConfig as any).deploymentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary-600 hover:text-primary-500"
+                              >
+                                Visit Site
+                              </a>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-600">Last Deployed:</span>
+                              <span className="text-sm text-gray-900">
+                                {new Date((currentProject.deploymentConfig as any).lastDeployedAt || currentProject.updatedAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center py-6">
+                            <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            <h3 className="text-sm font-medium text-gray-900 mb-2">Not Deployed</h3>
+                            <p className="text-sm text-gray-600 mb-4">
+                              Deploy your AI service to make it available online.
+                            </p>
+                            <Link
+                              href={`/projects/${currentProject.id}/deploy`}
+                              className="btn-primary btn-sm"
+                            >
+                              Deploy Now
+                            </Link>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Sidebar */}
@@ -305,15 +324,27 @@ const ProjectDetailPage: NextPage = () => {
                         <span className="text-sm font-medium text-gray-900">Edit Project</span>
                       </Link>
 
-                      <Link
-                        href={`/projects/${currentProject.id}/deploy`}
-                        className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <svg className="w-5 h-5 text-gray-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <span className="text-sm font-medium text-gray-900">Deploy Service</span>
-                      </Link>
+                      {currentProject.projectType === 'NO_CODE' ? (
+                        <Link
+                          href={`/projects/${currentProject.id}/deploy`} // Link to a simplified deploy page for no-code
+                          className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <svg className="w-5 h-5 text-gray-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <span className="text-sm font-medium text-gray-900">Deploy Page</span>
+                        </Link>
+                      ) : (
+                        <Link
+                          href={`/projects/${currentProject.id}/deploy`}
+                          className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <svg className="w-5 h-5 text-gray-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <span className="text-sm font-medium text-gray-900">Deploy Service</span>
+                        </Link>
+                      )}
 
                       <Link
                         href={`/projects/${currentProject.id}/analytics`}

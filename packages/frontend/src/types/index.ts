@@ -14,26 +14,26 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+  category: string; // Added category
   status: 'draft' | 'development' | 'deployed' | 'archived';
+  projectType: 'LOW_CODE' | 'NO_CODE'; // Added projectType
+  pageContent?: Record<string, any>; // Added pageContent
   userId: string;
   templateId?: string;
-  aiModel?: AIModel;
-  deployments: Deployment[];
+  aiModel?: Record<string, any>; // Changed to Record<string, any> for flexibility
+  deploymentConfig?: Record<string, any>; // Added for singular deployment config
+  deploymentLogs: DeploymentRecordFrontend[]; // Renamed and clarified
   revenue?: RevenueData;
   createdAt: string;
   updatedAt: string;
 }
 
-// AI Model types
-export interface AIModel {
-  id: string;
-  name: string;
-  url: string;
-  type: 'teachable-machine' | 'custom';
-  description?: string;
-  status: 'active' | 'inactive';
-  createdAt: string;
-  updatedAt: string;
+// AI Model types (aligned with backend AIModelConfig)
+export interface AIModelConfig {
+  type: 'teachable-machine' | 'huggingface' | 'custom';
+  modelUrl: string;
+  modelId: string;
+  configuration: Record<string, any>;
 }
 
 // Template types
@@ -58,27 +58,29 @@ export interface Template {
   lastUpdated: string;
 }
 
-// Deployment types
-export interface Deployment {
-  id: string;
-  projectId: string;
-  platform: 'cloudflare' | 'vercel' | 'netlify';
-  status: 'pending' | 'building' | 'deployed' | 'failed';
-  url?: string;
-  domain?: string;
-  environmentVariables?: Record<string, string>;
-  buildCommand?: string;
-  outputDirectory?: string;
-  logs: DeploymentLog[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface DeploymentLog {
-  id: string;
-  timestamp: string;
+// Deployment types (aligned with backend DeploymentLog)
+export interface LogEntry {
   level: 'info' | 'warn' | 'error';
   message: string;
+  timestamp: string;
+}
+
+export interface DeploymentRecordFrontend {
+  id: string;
+  projectId: string;
+  status: 'pending' | 'building' | 'success' | 'failed' | 'cancelled'; // Aligned with backend
+  platform: string;
+  configuration?: Record<string, any>; // Added configuration
+  isRollback?: boolean; // Added isRollback
+  rollbackFromId?: string; // Added rollbackFromId
+  url?: string;
+  previewUrl?: string;
+  buildLogs?: string[];
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string; // Changed to string
+  logs?: LogEntry[]; // Aligned logs type
 }
 
 // Revenue types

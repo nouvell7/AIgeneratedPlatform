@@ -1,3 +1,4 @@
+import { injectable } from 'tsyringe';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ValidationError } from '../utils/errors';
 import { loggers } from '../utils/logger';
@@ -58,11 +59,12 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   },
 };
 
+@injectable()
 export class UserSettingsService {
   /**
    * Get user settings
    */
-  static async getUserSettings(userId: string): Promise<UserSettings> {
+  async getUserSettings(userId: string): Promise<UserSettings> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { settings: true },
@@ -73,14 +75,14 @@ export class UserSettingsService {
     }
 
     // Merge with default settings to ensure all fields are present
-    const userSettings = user.settings as any;
+    const userSettings = user.settings ? JSON.parse(user.settings) : {};
     return this.mergeWithDefaults(userSettings);
   }
 
   /**
    * Update user settings
    */
-  static async updateUserSettings(
+  async updateUserSettings(
     userId: string,
     updates: Partial<UserSettings>
   ): Promise<UserSettings> {
@@ -97,7 +99,7 @@ export class UserSettingsService {
     await prisma.user.update({
       where: { id: userId },
       data: {
-        settings: newSettings,
+        settings: JSON.stringify(newSettings),
         updatedAt: new Date(),
       },
     });
@@ -110,13 +112,13 @@ export class UserSettingsService {
   /**
    * Reset settings to defaults
    */
-  static async resetSettings(userId: string): Promise<UserSettings> {
+  async resetSettings(userId: string): Promise<UserSettings> {
     const defaultSettings = { ...DEFAULT_USER_SETTINGS };
 
     await prisma.user.update({
       where: { id: userId },
       data: {
-        settings: defaultSettings,
+        settings: JSON.stringify(defaultSettings),
         updatedAt: new Date(),
       },
     });
@@ -129,7 +131,7 @@ export class UserSettingsService {
   /**
    * Update notification settings
    */
-  static async updateNotificationSettings(
+  async updateNotificationSettings(
     userId: string,
     notifications: Partial<UserSettings['notifications']>
   ): Promise<UserSettings> {
@@ -146,7 +148,7 @@ export class UserSettingsService {
   /**
    * Update privacy settings
    */
-  static async updatePrivacySettings(
+  async updatePrivacySettings(
     userId: string,
     privacy: Partial<UserSettings['privacy']>
   ): Promise<UserSettings> {
@@ -163,7 +165,7 @@ export class UserSettingsService {
   /**
    * Update preference settings
    */
-  static async updatePreferences(
+  async updatePreferences(
     userId: string,
     preferences: Partial<UserSettings['preferences']>
   ): Promise<UserSettings> {
@@ -194,7 +196,7 @@ export class UserSettingsService {
   /**
    * Update developer settings
    */
-  static async updateDeveloperSettings(
+  async updateDeveloperSettings(
     userId: string,
     developer: Partial<UserSettings['developer']>
   ): Promise<UserSettings> {
@@ -211,7 +213,7 @@ export class UserSettingsService {
   /**
    * Export user settings
    */
-  static async exportSettings(userId: string): Promise<{
+  async exportSettings(userId: string): Promise<{
     settings: UserSettings;
     exportedAt: string;
     version: string;
@@ -228,7 +230,7 @@ export class UserSettingsService {
   /**
    * Import user settings
    */
-  static async importSettings(
+  async importSettings(
     userId: string,
     importData: {
       settings: Partial<UserSettings>;
@@ -251,7 +253,7 @@ export class UserSettingsService {
   /**
    * Get settings schema for validation
    */
-  static getSettingsSchema(): Record<string, any> {
+  getSettingsSchema(): Record<string, any> {
     return {
       notifications: {
         type: 'object',
@@ -296,11 +298,11 @@ export class UserSettingsService {
   /**
    * Private helper methods
    */
-  private static mergeWithDefaults(userSettings: any): UserSettings {
+  private mergeWithDefaults(userSettings: UserSettings): UserSettings {
     return this.deepMerge(DEFAULT_USER_SETTINGS, userSettings || {});
   }
 
-  private static deepMerge(target: any, source: any): any {
+  private deepMerge(target: any, source: any): any {
     const result = { ...target };
     
     for (const key in source) {
@@ -314,7 +316,7 @@ export class UserSettingsService {
     return result;
   }
 
-  private static validateSettings(settings: UserSettings): void {
+  private validateSettings(settings: UserSettings): void {
     // Validate theme
     if (!['light', 'dark', 'system'].includes(settings.preferences.theme)) {
       throw new ValidationError('Invalid theme value');
@@ -336,7 +338,7 @@ export class UserSettingsService {
     }
   }
 
-  private static isValidTimezone(timezone: string): boolean {
+  private isValidTimezone(timezone: string): boolean {
     try {
       Intl.DateTimeFormat(undefined, { timeZone: timezone });
       return true;
@@ -345,15 +347,13 @@ export class UserSettingsService {
     }
   }
 
-  private static isValidLanguage(language: string): boolean {
+  private isValidLanguage(language: string): boolean {
     // Basic language code validation (ISO 639-1)
     return /^[a-z]{2}(-[A-Z]{2})?$/.test(language);
   }
 
-  private static isValidCurrency(currency: string): boolean {
+  private isValidCurrency(currency: string): boolean {
     // Basic currency code validation (ISO 4217)
     return /^[A-Z]{3}$/.test(currency);
   }
 }
-
-export default UserSettingsService;

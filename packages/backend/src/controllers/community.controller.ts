@@ -1,13 +1,17 @@
-import { Request, Response } from 'express';
-import { communityService } from '../services/community.service';
+import { Request, Response, NextFunction } from 'express'; // NextFunction 추가
+import { injectable, inject } from 'tsyringe';
+import { CommunityService } from '../services/community.service';
 import { logger } from '../utils/logger';
 import { AppError } from '../utils/errors';
 
+@injectable()
 export class CommunityController {
+  constructor(@inject(CommunityService) private communityService: CommunityService) {}
+
   /**
    * Get community posts
    */
-  async getPosts(req: Request, res: Response) {
+  async getPosts(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const {
         page = '1',
@@ -17,13 +21,12 @@ export class CommunityController {
         sortBy = 'recent'
       } = req.query;
 
-      const tagsArray = typeof tags === 'string' ? tags.split(',') : undefined;
-
-      const result = await communityService.getPosts(
+      // tagsArray 대신 tags를 직접 전달 (service에서 string으로 처리됨)
+      const result = await this.communityService.getPosts(
         parseInt(page as string),
         parseInt(limit as string),
         type as string,
-        tagsArray,
+        tags as string, // tagsArray 대신 tags를 string으로 캐스팅
         sortBy as 'recent' | 'popular' | 'votes'
       );
 
@@ -46,7 +49,7 @@ export class CommunityController {
   /**
    * Get a single post
    */
-  async getPost(req: Request, res: Response) {
+  async getPost(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const { postId } = req.params;
       const userId = req.user?.userId;
@@ -55,7 +58,7 @@ export class CommunityController {
         throw new AppError('Post ID is required', 400);
       }
 
-      const post = await communityService.getPost(postId, userId);
+      const post = await this.communityService.getPost(postId, userId);
 
       res.json({
         success: true,
@@ -76,7 +79,7 @@ export class CommunityController {
   /**
    * Create a new post
    */
-  async createPost(req: Request, res: Response) {
+  async createPost(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const userId = req.user?.userId;
       const { title, content, type, tags } = req.body;
@@ -89,11 +92,11 @@ export class CommunityController {
         throw new AppError('Title, content, and type are required', 400);
       }
 
-      const post = await communityService.createPost(userId, {
+      const post = await this.communityService.createPost(userId, {
         title,
         content,
         type,
-        tags: tags || [],
+        tags: tags || '', // tags를 string으로 처리
       });
 
       res.status(201).json({
@@ -115,11 +118,11 @@ export class CommunityController {
   /**
    * Update a post
    */
-  async updatePost(req: Request, res: Response) {
+  async updatePost(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const { postId } = req.params;
       const userId = req.user?.userId;
-      const { title, content, tags, isResolved } = req.body;
+      const { title, content, tags, isResolved } = req.body; // isResolved는 서비스에서 처리되지 않으므로 제거 필요
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -129,11 +132,11 @@ export class CommunityController {
         throw new AppError('Post ID is required', 400);
       }
 
-      const post = await communityService.updatePost(postId, userId, {
+      const post = await this.communityService.updatePost(postId, userId, {
         title,
         content,
         tags,
-        isResolved,
+        // isResolved, // isResolved 제거
       });
 
       res.json({
@@ -155,7 +158,7 @@ export class CommunityController {
   /**
    * Delete a post
    */
-  async deletePost(req: Request, res: Response) {
+  async deletePost(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const { postId } = req.params;
       const userId = req.user?.userId;
@@ -168,7 +171,7 @@ export class CommunityController {
         throw new AppError('Post ID is required', 400);
       }
 
-      await communityService.deletePost(postId, userId);
+      await this.communityService.deletePost(postId, userId);
 
       res.json({
         success: true,
@@ -189,7 +192,7 @@ export class CommunityController {
   /**
    * Vote on a post
    */
-  async votePost(req: Request, res: Response) {
+  async votePost(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const { postId } = req.params;
       const { voteType } = req.body;
@@ -207,7 +210,7 @@ export class CommunityController {
         throw new AppError('Valid vote type is required (up or down)', 400);
       }
 
-      const result = await communityService.votePost(postId, userId, voteType);
+      const result = await this.communityService.votePost(postId, userId, voteType);
 
       res.json({
         success: true,
@@ -228,7 +231,7 @@ export class CommunityController {
   /**
    * Add a comment
    */
-  async addComment(req: Request, res: Response) {
+  async addComment(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const { postId } = req.params;
       const { content, parentId } = req.body;
@@ -246,7 +249,7 @@ export class CommunityController {
         throw new AppError('Comment content is required', 400);
       }
 
-      const comment = await communityService.addComment(postId, userId, content, parentId);
+      const comment = await this.communityService.addComment(postId, userId, content, parentId);
 
       res.status(201).json({
         success: true,
@@ -267,7 +270,7 @@ export class CommunityController {
   /**
    * Vote on a comment
    */
-  async voteComment(req: Request, res: Response) {
+  async voteComment(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const { commentId } = req.params;
       const { voteType } = req.body;
@@ -285,7 +288,7 @@ export class CommunityController {
         throw new AppError('Valid vote type is required (up or down)', 400);
       }
 
-      const result = await communityService.voteComment(commentId, userId, voteType);
+      const result = await this.communityService.voteComment(commentId, userId, voteType);
 
       res.json({
         success: true,
@@ -306,7 +309,7 @@ export class CommunityController {
   /**
    * Accept a comment as answer
    */
-  async acceptComment(req: Request, res: Response) {
+  async acceptComment(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const { commentId } = req.params;
       const userId = req.user?.userId;
@@ -319,7 +322,7 @@ export class CommunityController {
         throw new AppError('Comment ID is required', 400);
       }
 
-      await communityService.acceptComment(commentId, userId);
+      await this.communityService.acceptComment(commentId, userId);
 
       res.json({
         success: true,
@@ -340,7 +343,7 @@ export class CommunityController {
   /**
    * Get shared projects
    */
-  async getSharedProjects(req: Request, res: Response) {
+  async getSharedProjects(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const {
         page = '1',
@@ -350,13 +353,13 @@ export class CommunityController {
         sortBy = 'recent'
       } = req.query;
 
-      const tagsArray = typeof tags === 'string' ? tags.split(',') : undefined;
+      const tagsString = typeof tags === 'string' ? tags : undefined;
 
-      const result = await communityService.getSharedProjects(
+      const result = await this.communityService.getSharedProjects(
         parseInt(page as string),
         parseInt(limit as string),
         category as string,
-        tagsArray,
+        tagsString,
         sortBy as 'recent' | 'popular' | 'likes'
       );
 
@@ -379,7 +382,7 @@ export class CommunityController {
   /**
    * Share a project
    */
-  async shareProject(req: Request, res: Response) {
+  async shareProject(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const { projectId } = req.params;
       const userId = req.user?.userId;
@@ -397,11 +400,11 @@ export class CommunityController {
         throw new AppError('Title, description, and category are required', 400);
       }
 
-      const sharedProject = await communityService.shareProject(userId, projectId, {
+      const sharedProject = await this.communityService.shareProject(userId, projectId, {
         title,
         description,
         category,
-        tags: tags || [],
+        tags: tags || '',
         previewUrl,
         sourceUrl,
         isPublic: isPublic !== false, // Default to true
@@ -426,7 +429,7 @@ export class CommunityController {
   /**
    * Like a shared project
    */
-  async likeProject(req: Request, res: Response) {
+  async likeProject(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const { projectId } = req.params;
       const userId = req.user?.userId;
@@ -439,7 +442,7 @@ export class CommunityController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const result = await communityService.likeProject(projectId, userId);
+      const result = await this.communityService.likeProject(projectId, userId);
 
       res.json({
         success: true,
@@ -460,7 +463,7 @@ export class CommunityController {
   /**
    * Report inappropriate content
    */
-  async reportContent(req: Request, res: Response) {
+  async reportContent(req: Request, res: Response, next: NextFunction) { // NextFunction 추가
     try {
       const { contentType, contentId, reason, description } = req.body;
       const userId = req.user?.userId;
@@ -477,7 +480,7 @@ export class CommunityController {
         throw new AppError('Invalid content type', 400);
       }
 
-      await communityService.reportContent(userId, contentType, contentId, reason, description);
+      await this.communityService.reportContent(userId, contentType, contentId, reason, description);
 
       res.json({
         success: true,
@@ -495,5 +498,3 @@ export class CommunityController {
     }
   }
 }
-
-export const communityController = new CommunityController();

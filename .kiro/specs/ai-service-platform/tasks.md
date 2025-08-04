@@ -308,20 +308,58 @@
     - 외부 서비스 연동 테스트 (모킹)
     - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1_
 
-- [ ] 21. 배포 및 인프라 설정
-  - [ ] 21.1 프로덕션 환경 설정
+- [x] 21. 백엔드 DI(의존성 주입) 리팩토링
+  - [x] 21.1 DI 컨테이너 설정 및 라이브러리 추가
+    - tsyringe, reflect-metadata, @octokit/rest 의존성 추가
+    - reflect-metadata import 및 데코레이터 설정
+    - tsconfig.json에 experimentalDecorators, emitDecoratorMetadata 설정
+    - _Requirements: 모든 백엔드 요구사항_
+  
+  - [x] 21.2 서비스 및 컨트롤러 DI 패턴 적용
+    - 모든 서비스와 컨트롤러에 @injectable() 데코레이터 적용
+    - static 메소드를 인스턴스 메소드로 변경
+    - 생성자 기반 의존성 주입 구현
+    - _Requirements: 모든 백엔드 요구사항_
+  
+  - [x] 21.3 라우팅 시스템 DI 컨테이너 연동
+    - 라우트 파일에서 container.resolve() 사용
+    - 컨트롤러 인스턴스 싱글톤 관리
+    - 의존성 그래프 자동 해결
+    - _Requirements: 모든 백엔드 요구사항_
+
+- [x] 22. No-Code 기능 구현
+  - [x] 22.1 데이터 모델 확장
+    - Project 모델에 projectType, pageContent 필드 추가
+    - Prisma 스키마 업데이트 및 마이그레이션
+    - TypeScript 인터페이스 동기화
+    - _Requirements: 8.1, 8.4_
+  
+  - [x] 22.2 백엔드 No-Code 로직 구현
+    - ProjectService에 No-Code 프로젝트 처리 로직 추가
+    - 정적 페이지 생성 유틸리티 구현
+    - DeploymentService에 프로젝트 타입별 배포 분기 추가
+    - _Requirements: 8.1, 8.3_
+  
+  - [x] 22.3 프론트엔드 No-Code 에디터 구현
+    - NoCodeEditor 컴포넌트 개발
+    - 프로젝트 상세 페이지에 조건부 렌더링 적용
+    - updateProjectPageContent API 클라이언트 함수 구현
+    - _Requirements: 8.1, 8.2_
+
+- [ ] 23. 배포 및 인프라 설정
+  - [ ] 23.1 프로덕션 환경 설정
     - Docker 컨테이너 최적화 및 멀티스테이지 빌드
     - 환경별 설정 파일 및 시크릿 관리
     - 데이터베이스 마이그레이션 자동화
     - _Requirements: 모든 요구사항_
   
-  - [ ] 21.2 CI/CD 파이프라인 구축
+  - [ ] 23.2 CI/CD 파이프라인 구축
     - GitHub Actions 워크플로우 설정
     - 자동 테스트 및 빌드 파이프라인
     - 스테이징 및 프로덕션 배포 자동화
     - _Requirements: 모든 요구사항_
   
-  - [ ] 21.3 모니터링 및 로깅 시스템 구축
+  - [ ] 23.3 모니터링 및 로깅 시스템 구축
     - 애플리케이션 성능 모니터링 설정
     - 에러 추적 및 알림 시스템 구축
     - 로그 수집 및 분석 시스템 설정

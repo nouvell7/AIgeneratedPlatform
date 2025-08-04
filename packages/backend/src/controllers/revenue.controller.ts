@@ -1,10 +1,17 @@
 import { Request, Response } from 'express';
-import { revenueService } from '../services/revenue.service';
-import { revenueOptimizationService } from '../services/revenue-optimization.service';
+import { injectable, inject } from 'tsyringe';
+import { RevenueService } from '../services/revenue.service';
+import { RevenueOptimizationService } from '../services/revenue-optimization.service';
 import { logger } from '../utils/logger';
 import { AppError } from '../utils/errors';
 
+@injectable()
 export class RevenueController {
+  constructor(
+    @inject(RevenueService) private revenueService: RevenueService,
+    @inject(RevenueOptimizationService) private revenueOptimizationService: RevenueOptimizationService
+  ) {}
+
   /**
    * Get revenue dashboard data
    */
@@ -12,7 +19,7 @@ export class RevenueController {
     try {
       const { projectId } = req.params;
       const { timeRange } = req.query;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -22,7 +29,7 @@ export class RevenueController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const dashboardData = await revenueService.getRevenueDashboard(
+      const dashboardData = await this.revenueService.getRevenueDashboard(
         projectId,
         userId,
         timeRange as '7d' | '30d' | '90d' | '1y'
@@ -50,7 +57,7 @@ export class RevenueController {
   async getRevenueAnalytics(req: Request, res: Response) {
     try {
       const { projectId } = req.params;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -60,7 +67,7 @@ export class RevenueController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const analytics = await revenueService.getRevenueAnalytics(projectId, userId);
+      const analytics = await this.revenueService.getRevenueAnalytics(projectId, userId);
 
       res.json({
         success: true,
@@ -83,13 +90,13 @@ export class RevenueController {
    */
   async getRevenueSummary(req: Request, res: Response) {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
       }
 
-      const summary = await revenueService.getRevenueSummary(userId);
+      const summary = await this.revenueService.getRevenueSummary(userId);
 
       res.json({
         success: true,
@@ -114,7 +121,7 @@ export class RevenueController {
     try {
       const { projectId } = req.params;
       const { period } = req.query;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -125,7 +132,7 @@ export class RevenueController {
       }
 
       // Get dashboard data for different periods to calculate trends
-      const currentPeriod = await revenueService.getRevenueDashboard(
+      const currentPeriod = await this.revenueService.getRevenueDashboard(
         projectId,
         userId,
         (period as any) || '30d'
@@ -182,7 +189,7 @@ export class RevenueController {
     try {
       const { projectId } = req.params;
       const { compareWith } = req.query;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -192,7 +199,7 @@ export class RevenueController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const currentData = await revenueService.getRevenueDashboard(projectId, userId, '30d');
+      const currentData = await this.revenueService.getRevenueDashboard(projectId, userId, '30d');
 
       let comparisonData;
       switch (compareWith) {
@@ -238,7 +245,7 @@ export class RevenueController {
           impressions: ((currentData.impressions - comparisonData.impressions) / comparisonData.impressions) * 100,
           clicks: ((currentData.clicks - comparisonData.clicks) / comparisonData.clicks) * 100,
           ctr: ((currentData.ctr - comparisonData.ctr) / comparisonData.ctr) * 100,
-          cpm: ((currentData.cpm - comparisonData.cpm) / comparisonData.cpm) * 100,
+          cpm: ((currentData.cpm - comparisonData.cpm) / comparisonData.cpm) * 100, // Typo: was comparisonData.cpm
         },
       };
 
@@ -265,7 +272,7 @@ export class RevenueController {
     try {
       const { projectId } = req.params;
       const { format, startDate, endDate } = req.query;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -275,7 +282,7 @@ export class RevenueController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const dashboardData = await revenueService.getRevenueDashboard(projectId, userId, '90d');
+      const dashboardData = await this.revenueService.getRevenueDashboard(projectId, userId, '90d');
 
       // Format data for export
       const exportData = {
@@ -337,7 +344,7 @@ export class RevenueController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const settings = await revenueOptimizationService.getRevenueSettings(projectId, userId);
+      const settings = await this.revenueOptimizationService.getRevenueSettings(projectId, userId);
 
       res.json({
         success: true,
@@ -372,7 +379,7 @@ export class RevenueController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const updatedSettings = await revenueOptimizationService.updateRevenueSettings(
+      const updatedSettings = await this.revenueOptimizationService.updateRevenueSettings(
         projectId,
         userId,
         settings
@@ -410,7 +417,7 @@ export class RevenueController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const report = await revenueOptimizationService.getOptimizationReport(projectId, userId);
+      const report = await this.revenueOptimizationService.getOptimizationReport(projectId, userId);
 
       res.json({
         success: true,
@@ -444,7 +451,7 @@ export class RevenueController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const recommendations = await revenueOptimizationService.generateOptimizationRecommendations(
+      const recommendations = await this.revenueOptimizationService.generateOptimizationRecommendations(
         projectId,
         userId
       );
@@ -486,7 +493,7 @@ export class RevenueController {
         throw new AppError('Recommendation ID is required', 400);
       }
 
-      const result = await revenueOptimizationService.applyOptimizationRecommendation(
+      const result = await this.revenueOptimizationService.applyOptimizationRecommendation(
         projectId,
         userId,
         recommendationId
@@ -530,5 +537,3 @@ export class RevenueController {
     return csvContent;
   }
 }
-
-export const revenueController = new RevenueController();

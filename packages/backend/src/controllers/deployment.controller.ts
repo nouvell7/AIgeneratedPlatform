@@ -1,16 +1,20 @@
 import { Request, Response } from 'express';
-import { deploymentService, DeploymentConfig } from '../services/deployment.service';
+import { injectable, inject } from 'tsyringe';
+import { DeploymentService, DeploymentConfig } from '../services/deployment.service';
 import { logger } from '../utils/logger';
 import { AppError } from '../utils/errors';
 
+@injectable()
 export class DeploymentController {
+  constructor(@inject(DeploymentService) private deploymentService: DeploymentService) {}
+
   /**
    * Start deployment
    */
   async startDeployment(req: Request, res: Response) {
     try {
       const { projectId } = req.params;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
       const config: DeploymentConfig = req.body;
 
       if (!userId) {
@@ -21,7 +25,7 @@ export class DeploymentController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const deployment = await deploymentService.startDeployment(projectId, userId, config);
+      const deployment = await this.deploymentService.startDeployment(projectId, userId, config);
 
       res.status(201).json({
         success: true,
@@ -45,7 +49,7 @@ export class DeploymentController {
   async getDeploymentStatus(req: Request, res: Response) {
     try {
       const { projectId } = req.params;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -55,7 +59,7 @@ export class DeploymentController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const deployment = await deploymentService.getDeploymentStatus(projectId, userId);
+      const deployment = await this.deploymentService.getDeploymentStatus(projectId, userId);
 
       res.json({
         success: true,
@@ -79,7 +83,7 @@ export class DeploymentController {
   async getDeploymentLogs(req: Request, res: Response) {
     try {
       const { projectId, deploymentId } = req.params;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -89,7 +93,7 @@ export class DeploymentController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const logs = await deploymentService.getDeploymentLogs(projectId, userId, deploymentId);
+      const logs = await this.deploymentService.getDeploymentLogs(projectId, userId, deploymentId);
 
       res.json({
         success: true,
@@ -113,7 +117,7 @@ export class DeploymentController {
   async cancelDeployment(req: Request, res: Response) {
     try {
       const { projectId, deploymentId } = req.params;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -123,7 +127,7 @@ export class DeploymentController {
         throw new AppError('Project ID and Deployment ID are required', 400);
       }
 
-      await deploymentService.cancelDeployment(projectId, deploymentId, userId);
+      await this.deploymentService.cancelDeployment(projectId, deploymentId, userId);
 
       res.json({
         success: true,
@@ -148,7 +152,7 @@ export class DeploymentController {
     try {
       const { projectId } = req.params;
       const { targetDeploymentId } = req.body;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -162,7 +166,7 @@ export class DeploymentController {
         throw new AppError('Target deployment ID is required', 400);
       }
 
-      const deployment = await deploymentService.rollbackDeployment(
+      const deployment = await this.deploymentService.rollbackDeployment(
         projectId,
         targetDeploymentId,
         userId
@@ -191,7 +195,7 @@ export class DeploymentController {
     try {
       const { projectId } = req.params;
       const { limit } = req.query;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -201,7 +205,7 @@ export class DeploymentController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const deployments = await deploymentService.getDeploymentHistory(
+      const deployments = await this.deploymentService.getDeploymentHistory(
         projectId,
         userId,
         limit ? parseInt(limit as string) : undefined
@@ -230,7 +234,7 @@ export class DeploymentController {
     try {
       const { projectId } = req.params;
       const { timeRange } = req.query;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -240,7 +244,7 @@ export class DeploymentController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const metrics = await deploymentService.getDeploymentMetrics(
+      const metrics = await this.deploymentService.getDeploymentMetrics(
         projectId,
         userId,
         timeRange as '1h' | '24h' | '7d' | '30d'
@@ -344,7 +348,7 @@ export class DeploymentController {
     try {
       const { projectId } = req.params;
       const config: DeploymentConfig = req.body;
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
 
       if (!userId) {
         throw new AppError('Authentication required', 401);
@@ -397,5 +401,3 @@ export class DeploymentController {
     }
   }
 }
-
-export const deploymentController = new DeploymentController();

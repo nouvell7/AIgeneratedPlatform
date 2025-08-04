@@ -22,12 +22,20 @@ export const createProjectSchema = z.object({
   description: z.string().optional(),
   templateId: z.string().optional(),
   aiModelUrl: z.string().url('유효한 URL을 입력해주세요').optional(),
+  projectType: z.enum(['LOW_CODE', 'NO_CODE']).optional(),
+  pageContent: z.record(z.any()).optional(), // For no-code projects
 });
 
 export const updateProjectSchema = z.object({
   name: z.string().min(1, '프로젝트 이름을 입력해주세요').optional(),
   description: z.string().optional(),
   status: z.enum(['draft', 'development', 'deployed', 'archived']).optional(),
+  pageContent: z.record(z.any()).optional(), // For no-code projects
+});
+
+// New schema for updating only page content
+export const updatePageContentSchema = z.object({
+  pageContent: z.record(z.any()),
 });
 
 // AI Model schemas
@@ -73,6 +81,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
+export type UpdatePageContentInput = z.infer<typeof updatePageContentSchema>;
 export type AIModelInput = z.infer<typeof aiModelSchema>;
 export type DeploymentConfigInput = z.infer<typeof deploymentConfigSchema>;
 export type RevenueSettingsInput = z.infer<typeof revenueSettingsSchema>;

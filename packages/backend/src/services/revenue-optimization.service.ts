@@ -1,4 +1,5 @@
-import { prisma } from '../lib/database';
+import { injectable, inject } from 'tsyringe';
+import { prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
 import { AppError } from '../utils/errors';
 
@@ -81,7 +82,8 @@ export interface RevenueOptimizationReport {
   };
 }
 
-class RevenueOptimizationService {
+@injectable()
+export class RevenueOptimizationService {
   /**
    * Get revenue settings for a project
    */
@@ -100,7 +102,7 @@ class RevenueOptimizationService {
         throw new AppError('You can only view settings for your own projects', 403);
       }
 
-      const revenue = project.revenue as any;
+      const revenue = project.revenue ? JSON.parse(project.revenue) : null;
       
       // Return default settings if none exist
       if (!revenue?.settings) {
@@ -136,7 +138,7 @@ class RevenueOptimizationService {
         throw new AppError('You can only update settings for your own projects', 403);
       }
 
-      const revenue = project.revenue as any || {};
+      const revenue = project.revenue ? JSON.parse(project.revenue) : {};
       const currentSettings = revenue.settings || this.getDefaultSettings();
       
       // Merge with existing settings
@@ -152,10 +154,10 @@ class RevenueOptimizationService {
       await prisma.project.update({
         where: { id: projectId },
         data: {
-          revenue: {
+          revenue: JSON.stringify({ // Stringify revenue object
             ...revenue,
             settings: updatedSettings,
-          } as any,
+          }),
         },
       });
 
@@ -189,7 +191,7 @@ class RevenueOptimizationService {
         throw new AppError('You can only get recommendations for your own projects', 403);
       }
 
-      const revenue = project.revenue as any;
+      const revenue = project.revenue ? JSON.parse(project.revenue) : null;
       const settings = revenue?.settings || this.getDefaultSettings();
 
       const recommendations: OptimizationRecommendation[] = [];
@@ -499,7 +501,7 @@ class RevenueOptimizationService {
         throw new AppError('You can only apply optimizations to your own projects', 403);
       }
 
-      const revenue = project.revenue as any || {};
+      const revenue = project.revenue ? JSON.parse(project.revenue) : {};
       const settings = revenue.settings || this.getDefaultSettings();
 
       // Apply the specific recommendation
@@ -543,10 +545,10 @@ class RevenueOptimizationService {
       await prisma.project.update({
         where: { id: projectId },
         data: {
-          revenue: {
+          revenue: JSON.stringify({
             ...revenue,
             settings: updatedSettings,
-          } as any,
+          }),
         },
       });
 
@@ -601,5 +603,3 @@ class RevenueOptimizationService {
     };
   }
 }
-
-export const revenueOptimizationService = new RevenueOptimizationService();

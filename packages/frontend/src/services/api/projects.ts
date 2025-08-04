@@ -1,5 +1,6 @@
 import { apiClient } from './client';
-import { Project, ApiResponse } from '@shared/types';
+import { Project, ApiResponse } from '@/types'; // Use frontend types/index.ts
+import { UpdatePageContentInput } from '@/lib/schemas'; // Import new schema
 
 export interface CreateProjectData {
   name: string;
@@ -138,5 +139,13 @@ export const getProjectCategories = async (): Promise<ApiResponse<{
   categories: Array<{ category: string; count: number }>;
 }>> => {
   const response = await apiClient.get('/projects/categories');
+  return response.data;
+};
+
+export const updateProjectPageContent = async (
+  projectId: string,
+  data: UpdatePageContentInput['pageContent']
+): Promise<ApiResponse<{ project: Project }>> => {
+  const response = await apiClient.put(`/projects/${projectId}/page-content`, { pageContent: data });
   return response.data;
 };

@@ -74,6 +74,36 @@ graph TB
 - **Repository Layer**: 데이터 접근 및 외부 API 연동
 - **Model Layer**: 데이터 모델 정의
 
+### Dependency Injection Architecture
+
+플랫폼은 tsyringe 기반의 의존성 주입 패턴을 사용합니다:
+
+- **Container Management**: tsyringe 컨테이너를 통한 서비스 생명주기 관리
+- **Decorator Pattern**: `@injectable()` 데코레이터를 통한 서비스 등록
+- **Constructor Injection**: 생성자를 통한 의존성 주입
+- **Singleton Pattern**: 서비스들은 싱글톤으로 관리되어 메모리 효율성 확보
+
+```typescript
+@injectable()
+export class AuthController {
+  constructor(@inject(AuthService) private authService: AuthService) {}
+}
+```
+
+### Project Type System
+
+플랫폼은 두 가지 프로젝트 타입을 지원합니다:
+
+#### Low-Code Projects
+- GitHub Codespaces 기반 개발 환경
+- AI 모델 연동 및 커스텀 코드 작성
+- 복잡한 로직 구현 가능
+
+#### No-Code Projects  
+- 웹 UI 기반 페이지 에디터
+- 정적 HTML 페이지 자동 생성
+- 코딩 지식 없이 빠른 배포 가능
+
 ## Components and Interfaces
 
 ### 1. Authentication Service
@@ -254,6 +284,13 @@ interface Project {
   description: string;
   category: string;
   status: 'draft' | 'developing' | 'deployed' | 'archived';
+  projectType: 'LOW_CODE' | 'NO_CODE';
+  pageContent?: {
+    title: string;
+    heading: string;
+    body: string;
+    imageUrl?: string;
+  };
   aiModel?: AIModelConfig;
   deploymentConfig?: DeploymentConfig;
   revenueConfig?: RevenueConfig;
@@ -442,3 +479,81 @@ interface ErrorResponse {
 - 실시간 성능 모니터링
 - 자동 알림 시스템
 - 로그 중앙화 관리
+##
+ Technology Stack Updates
+
+### Backend Architecture Enhancements
+
+#### Dependency Injection System
+- **Container**: tsyringe 기반 DI 컨테이너
+- **Lifecycle**: 싱글톤 패턴으로 서비스 관리
+- **Decorators**: @injectable() 데코레이터 활용
+- **Injection**: 생성자 기반 의존성 주입
+
+#### GitHub Integration
+- **Library**: @octokit/rest v20+
+- **Features**: Codespaces API, Repository management
+- **Authentication**: GitHub token 기반 인증
+
+#### Metadata Support
+- **Library**: reflect-metadata
+- **Purpose**: 데코레이터 메타데이터 처리
+- **Integration**: tsyringe와 연동
+
+### Project Type Architecture
+
+#### Low-Code Projects
+```typescript
+interface LowCodeProject extends Project {
+  projectType: 'LOW_CODE';
+  aiModel: AIModelConfig;
+  deployment: {
+    codespaceId: string;
+    repositoryUrl: string;
+    codespaceUrl: string;
+  };
+}
+```
+
+#### No-Code Projects
+```typescript
+interface NoCodeProject extends Project {
+  projectType: 'NO_CODE';
+  pageContent: {
+    title: string;
+    heading: string;
+    body: string;
+    imageUrl?: string;
+  };
+}
+```
+
+### Static Page Generation
+
+No-Code 프로젝트를 위한 정적 페이지 생성 시스템:
+
+```typescript
+export function generateStaticPage(pageContent: PageContent): string {
+  // HTML 템플릿 기반 정적 페이지 생성
+  // Tailwind CSS 스타일링 적용
+  // 반응형 디자인 지원
+}
+```
+
+### Deployment Architecture
+
+#### Project Type Based Deployment
+- **Low-Code**: GitHub Codespaces → Cloudflare Pages
+- **No-Code**: Static HTML Generation → Direct Deployment
+
+#### Deployment Flow
+```mermaid
+graph LR
+    A[Project Creation] --> B{Project Type?}
+    B -->|LOW_CODE| C[Codespaces Setup]
+    B -->|NO_CODE| D[Page Editor]
+    C --> E[Code Development]
+    D --> F[Static Generation]
+    E --> G[Cloudflare Deploy]
+    F --> G
+```

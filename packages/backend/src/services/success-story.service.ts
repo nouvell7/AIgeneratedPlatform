@@ -1,11 +1,13 @@
+import { injectable } from 'tsyringe'; // injectable 임포트
 import { prisma } from '../lib/prisma';
 import { SuccessStory } from '@prisma/client';
 
+@injectable() // injectable 데코레이터 추가
 export class SuccessStoryService {
   /**
    * Get all success stories
    */
-  static async getSuccessStories(
+  async getSuccessStories( // static 제거
     filters?: {
       category?: string;
       search?: string;
@@ -57,7 +59,7 @@ export class SuccessStoryService {
   /**
    * Get success story by ID
    */
-  static async getSuccessStoryById(storyId: string): Promise<SuccessStory> {
+  async getSuccessStoryById(storyId: string): Promise<SuccessStory> { // static 제거
     const story = await prisma.successStory.findUnique({
       where: { id: storyId },
     });
@@ -72,7 +74,7 @@ export class SuccessStoryService {
   /**
    * Get success stories by category
    */
-  static async getStoriesByCategory(category: string): Promise<SuccessStory[]> {
+  async getStoriesByCategory(category: string): Promise<SuccessStory[]> { // static 제거
     return prisma.successStory.findMany({
       where: { category },
       orderBy: { createdAt: 'desc' },
@@ -82,7 +84,7 @@ export class SuccessStoryService {
   /**
    * Get featured success stories
    */
-  static async getFeaturedStories(limit: number = 3): Promise<SuccessStory[]> {
+  async getFeaturedStories(limit: number = 3): Promise<SuccessStory[]> { // static 제거
     return prisma.successStory.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,

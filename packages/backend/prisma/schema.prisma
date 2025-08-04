@@ -45,6 +45,10 @@ model Project {
   description String
   category    String
   status      String        @default("DRAFT")
+  projectType String        @default("LOW_CODE") // 'LOW_CODE' or 'NO_CODE'
+  
+  // Page content for No-Code projects (JSON field)
+  pageContent String?
   
   // AI Model Configuration (JSON field)
   aiModel     String?

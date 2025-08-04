@@ -1,3 +1,4 @@
+import { injectable } from 'tsyringe';
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ExternalServiceError, ValidationError, InsufficientPermissionsError } from '../utils/errors';
@@ -27,11 +28,12 @@ export interface HuggingFaceModel {
   tokenRequired: boolean;
 }
 
+@injectable()
 export class AIModelService {
   /**
    * Connect AI model to project
    */
-  static async connectModel(
+  async connectModel(
     projectId: string,
     userId: string,
     modelConfig: AIModelConfig
@@ -56,7 +58,7 @@ export class AIModelService {
     await prisma.project.update({
       where: { id: projectId },
       data: {
-        aiModel: modelConfig as any,
+        aiModel: JSON.stringify(modelConfig),
         updatedAt: new Date(),
       },
     });
@@ -67,7 +69,7 @@ export class AIModelService {
   /**
    * Disconnect AI model from project
    */
-  static async disconnectModel(projectId: string, userId: string): Promise<void> {
+  async disconnectModel(projectId: string, userId: string): Promise<void> {
     // Verify project ownership
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -96,7 +98,7 @@ export class AIModelService {
   /**
    * Get project's AI model configuration
    */
-  static async getModelConfig(projectId: string, userId?: string): Promise<AIModelConfig | null> {
+  async getModelConfig(projectId: string, userId?: string): Promise<AIModelConfig | null> {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
@@ -114,19 +116,19 @@ export class AIModelService {
 
     // Check access permissions
     if (userId && project.userId !== userId) {
-      const userSettings = project.user.settings as any;
+      const userSettings = JSON.parse(project.user.settings || '{}');
       if (!userSettings?.privacy?.projectsPublic) {
         throw new NotFoundError('Project');
       }
     }
 
-    return project.aiModel as AIModelConfig | null;
+    return project.aiModel ? JSON.parse(project.aiModel) : null;
   }
 
   /**
    * Test AI model connection
    */
-  static async testModel(modelConfig: AIModelConfig): Promise<{
+  async testModel(modelConfig: AIModelConfig): Promise<{
     status: 'success' | 'error';
     message: string;
     details?: any;
@@ -159,7 +161,7 @@ export class AIModelService {
   /**
    * Get supported model types and their configurations
    */
-  static getSupportedModelTypes(): Array<{
+  getSupportedModelTypes(): Array<{
     type: string;
     name: string;
     description: string;
@@ -322,7 +324,7 @@ export class AIModelService {
   /**
    * Private helper methods
    */
-  private static async validateModelConfig(config: AIModelConfig): Promise<void> {
+  private async validateModelConfig(config: AIModelConfig): Promise<void> {
     // Basic validation
     if (!config.modelUrl || !config.modelId) {
       throw new ValidationError('Model URL and ID are required');
@@ -354,7 +356,7 @@ export class AIModelService {
     }
   }
 
-  private static async validateTeachableMachineConfig(config: AIModelConfig): Promise<void> {
+  private async validateTeachableMachineConfig(config: AIModelConfig): Promise<void> {
     // Check if URL follows Teachable Machine pattern
     if (!config.modelUrl.includes('teachablemachine.withgoogle.com')) {
       throw new ValidationError('Invalid Teachable Machine URL');
@@ -372,7 +374,7 @@ export class AIModelService {
     }
   }
 
-  private static async validateHuggingFaceConfig(config: AIModelConfig): Promise<void> {
+  private async validateHuggingFaceConfig(config: AIModelConfig): Promise<void> {
     // Check if URL follows Hugging Face pattern
     if (!config.modelUrl.includes('huggingface.co')) {
       throw new ValidationError('Invalid Hugging Face URL');
@@ -386,7 +388,7 @@ export class AIModelService {
     }
   }
 
-  private static async validateCustomConfig(config: AIModelConfig): Promise<void> {
+  private async validateCustomConfig(config: AIModelConfig): Promise<void> {
     const { method, inputFormat, outputFormat } = config.configuration;
     
     if (method && !['GET', 'POST'].includes(method)) {
@@ -394,7 +396,7 @@ export class AIModelService {
     }
   }
 
-  private static async testTeachableMachineModel(config: AIModelConfig): Promise<{
+  private async testTeachableMachineModel(config: AIModelConfig): Promise<{
     status: 'success' | 'error';
     message: string;
     details?: any;
@@ -420,7 +422,7 @@ export class AIModelService {
     }
   }
 
-  private static async testHuggingFaceModel(config: AIModelConfig): Promise<{
+  private async testHuggingFaceModel(config: AIModelConfig): Promise<{
     status: 'success' | 'error';
     message: string;
     details?: any;
@@ -464,7 +466,7 @@ export class AIModelService {
     }
   }
 
-  private static async testCustomModel(config: AIModelConfig): Promise<{
+  private async testCustomModel(config: AIModelConfig): Promise<{
     status: 'success' | 'error';
     message: string;
     details?: any;
@@ -495,5 +497,3 @@ export class AIModelService {
     }
   }
 }
-
-export default AIModelService;

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { injectable, inject } from 'tsyringe'; // tsyringe 임포트
 import { SuccessStoryService } from '../services/success-story.service';
 import { validateRequest, commonSchemas } from '../lib/validation';
 import { z } from 'zod';
@@ -8,12 +9,15 @@ const storyFiltersSchema = z.object({
   search: z.string().optional(),
 });
 
+@injectable() // injectable 데코레이터 추가
 export class SuccessStoryController {
+  constructor(@inject(SuccessStoryService) private successStoryService: SuccessStoryService) {} // 생성자 주입
+
   /**
    * Get all success stories
    * GET /success-stories
    */
-  static getSuccessStories = [
+  getSuccessStories = [ // static 제거
     validateRequest({ 
       query: z.object({
         ...storyFiltersSchema.shape,
@@ -24,7 +28,7 @@ export class SuccessStoryController {
       try {
         const { page, limit, ...filters } = req.query as any;
         
-        const result = await SuccessStoryService.getSuccessStories(
+        const result = await this.successStoryService.getSuccessStories( // this. 사용
           filters,
           { page, limit }
         );
@@ -52,12 +56,12 @@ export class SuccessStoryController {
    * Get success story by ID
    * GET /success-stories/:id
    */
-  static getSuccessStory = [
+  getSuccessStory = [ // static 제거
     validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { id } = req.params;
-        const story = await SuccessStoryService.getSuccessStoryById(id);
+        const story = await this.successStoryService.getSuccessStoryById(id); // this. 사용
 
         res.json({
           success: true,
@@ -73,10 +77,10 @@ export class SuccessStoryController {
    * Get featured success stories
    * GET /success-stories/featured
    */
-  static getFeatured = async (req: Request, res: Response, next: NextFunction) => {
+  getFeatured = async (req: Request, res: Response, next: NextFunction) => { // static 제거
     try {
       const limit = parseInt(req.query.limit as string) || 3;
-      const stories = await SuccessStoryService.getFeaturedStories(limit);
+      const stories = await this.successStoryService.getFeaturedStories(limit); // this. 사용
 
       res.json({
         success: true,
@@ -91,7 +95,7 @@ export class SuccessStoryController {
    * Get success stories by category
    * GET /success-stories/category/:category
    */
-  static getByCategory = [
+  getByCategory = [ // static 제거
     validateRequest({ 
       params: z.object({
         category: z.string().min(1, 'Category is required'),
@@ -100,7 +104,7 @@ export class SuccessStoryController {
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { category } = req.params;
-        const stories = await SuccessStoryService.getStoriesByCategory(category);
+        const stories = await this.successStoryService.getStoriesByCategory(category); // this. 사용
 
         res.json({
           success: true,
@@ -113,4 +117,4 @@ export class SuccessStoryController {
   ];
 }
 
-export default SuccessStoryController;
+// export default SuccessStoryController; // default export는 유지

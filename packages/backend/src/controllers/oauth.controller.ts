@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { injectable, inject } from 'tsyringe';
 import { OAuthService } from '../services/oauth.service';
 import { validateRequest } from '../lib/validation';
 import { z } from 'zod';
@@ -14,17 +15,20 @@ const unlinkAccountSchema = z.object({
   }),
 });
 
+@injectable()
 export class OAuthController {
+  constructor(@inject(OAuthService) private oauthService: OAuthService) {}
+
   /**
    * Handle Google OAuth login
    * POST /auth/oauth/google
    */
-  static googleLogin = [
+  googleLogin = [
     validateRequest({ body: oauthTokenSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { accessToken } = req.body;
-        const result = await OAuthService.handleGoogleLogin(accessToken);
+        const result = await this.oauthService.handleGoogleLogin(accessToken);
 
         res.json({
           success: true,
@@ -45,12 +49,12 @@ export class OAuthController {
    * Handle GitHub OAuth login
    * POST /auth/oauth/github
    */
-  static githubLogin = [
+  githubLogin = [
     validateRequest({ body: oauthTokenSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { accessToken } = req.body;
-        const result = await OAuthService.handleGitHubLogin(accessToken);
+        const result = await this.oauthService.handleGitHubLogin(accessToken);
 
         res.json({
           success: true,
@@ -71,7 +75,7 @@ export class OAuthController {
    * Unlink OAuth account
    * DELETE /auth/oauth/unlink
    */
-  static unlinkAccount = [
+  unlinkAccount = [
     validateRequest({ body: unlinkAccountSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -87,7 +91,7 @@ export class OAuthController {
         }
 
         const { provider } = req.body;
-        await OAuthService.unlinkOAuthAccount(userId, provider);
+        await this.oauthService.unlinkOAuthAccount(userId, provider);
 
         res.json({
           success: true,
@@ -103,7 +107,7 @@ export class OAuthController {
    * Get OAuth connection status
    * GET /auth/oauth/status
    */
-  static getConnectionStatus = async (req: Request, res: Response, next: NextFunction) => {
+  getConnectionStatus = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
       if (!userId) {
@@ -131,5 +135,3 @@ export class OAuthController {
     }
   };
 }
-
-export default OAuthController;

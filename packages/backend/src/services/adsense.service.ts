@@ -1,5 +1,6 @@
+import { injectable, inject } from 'tsyringe';
 import { google } from 'googleapis';
-import { prisma } from '../lib/database';
+import { prisma } from '../lib/prisma'; // Corrected import path
 import { logger } from '../utils/logger';
 import { AppError } from '../utils/errors';
 
@@ -27,7 +28,8 @@ export interface AdSenseConfig {
   adBlockRecoveryEnabled: boolean;
 }
 
-class AdSenseService {
+@injectable()
+export class AdSenseService {
   private adsense: any;
 
   constructor() {
@@ -97,12 +99,12 @@ class AdSenseService {
       await prisma.project.update({
         where: { id: projectId },
         data: {
-          revenue: {
+          revenue: JSON.stringify({ // Stringify revenue object
             adsenseEnabled: true,
             adsenseAccount: adSenseAccount,
             adsenseConfig: adSenseConfig,
             adsenseTokens: tokens,
-          } as any,
+          }),
         },
       });
 
@@ -137,7 +139,7 @@ class AdSenseService {
         throw new AppError('You can only view AdSense status for your own projects', 403);
       }
 
-      const revenue = project.revenue as any;
+      const revenue = project.revenue ? JSON.parse(project.revenue) : null;
       if (!revenue?.adsenseEnabled) {
         return { connected: false };
       }
@@ -179,7 +181,7 @@ class AdSenseService {
         throw new AppError('You can only create ad units for your own projects', 403);
       }
 
-      const revenue = project.revenue as any;
+      const revenue = project.revenue ? JSON.parse(project.revenue) : null;
       if (!revenue?.adsenseEnabled) {
         throw new AppError('AdSense is not connected for this project', 400);
       }
@@ -226,10 +228,10 @@ class AdSenseService {
       await prisma.project.update({
         where: { id: projectId },
         data: {
-          revenue: {
+          revenue: JSON.stringify({ // Stringify revenue object
             ...revenue,
             adsenseConfig: updatedConfig,
-          } as any,
+          }),
         },
       });
 
@@ -268,7 +270,7 @@ class AdSenseService {
         throw new AppError('You can only update AdSense settings for your own projects', 403);
       }
 
-      const revenue = project.revenue as any;
+      const revenue = project.revenue ? JSON.parse(project.revenue) : null;
       if (!revenue?.adsenseEnabled) {
         throw new AppError('AdSense is not connected for this project', 400);
       }
@@ -282,10 +284,10 @@ class AdSenseService {
       await prisma.project.update({
         where: { id: projectId },
         data: {
-          revenue: {
+          revenue: JSON.stringify({ // Stringify revenue object
             ...revenue,
             adsenseConfig: updatedConfig,
-          } as any,
+          }),
         },
       });
 
@@ -320,7 +322,7 @@ class AdSenseService {
         throw new AppError('You can only generate ad code for your own projects', 403);
       }
 
-      const revenue = project.revenue as any;
+      const revenue = project.revenue ? JSON.parse(project.revenue) : null;
       if (!revenue?.adsenseEnabled) {
         throw new AppError('AdSense is not connected for this project', 400);
       }
@@ -390,7 +392,7 @@ class AdSenseService {
         throw new AppError('You can only view revenue data for your own projects', 403);
       }
 
-      const revenue = project.revenue as any;
+      const revenue = project.revenue ? JSON.parse(project.revenue) : null;
       if (!revenue?.adsenseEnabled) {
         throw new AppError('AdSense is not connected for this project', 400);
       }
@@ -498,12 +500,12 @@ class AdSenseService {
       await prisma.project.update({
         where: { id: projectId },
         data: {
-          revenue: {
+          revenue: JSON.stringify({ // Stringify revenue object
             adsenseEnabled: false,
             adsenseAccount: null,
             adsenseConfig: null,
             adsenseTokens: null,
-          } as any,
+          }),
         },
       });
 
@@ -514,5 +516,3 @@ class AdSenseService {
     }
   }
 }
-
-export const adsenseService = new AdSenseService();

@@ -10,21 +10,16 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "./dist",
-    "rootDir": "./src",
     "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "baseUrl": "./src",
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "@/controllers/*": ["./controllers/*"],
-      "@/services/*": ["./services/*"],
-      "@/middleware/*": ["./middleware/*"],
-      "@/utils/*": ["./utils/*"],
-      "@/lib/*": ["./lib/*"]
+      "@/*": ["src/*"],
+      "@shared/*": ["../shared/src/*"]
     }
   },
   "include": [

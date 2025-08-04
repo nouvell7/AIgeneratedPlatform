@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { injectable, inject } from 'tsyringe';
 import { TemplateService } from '../services/template.service';
 import { ProjectService } from '../services/project.service';
 import { validateRequest, commonSchemas } from '../lib/validation';
@@ -11,13 +12,19 @@ const templateFiltersSchema = z.object({
   tags: z.string().transform(val => val.split(',')).pipe(z.array(z.string())).optional(),
 });
 
+@injectable()
 export class TemplateController {
+  constructor(
+    @inject(TemplateService) private templateService: TemplateService,
+    @inject(ProjectService) private projectService: ProjectService
+  ) {}
+
   /**
    * Get all templates
    * GET /templates
    */
-  static getTemplates = [
-    validateRequest({ 
+  getTemplates = [
+    validateRequest({
       query: z.object({
         ...templateFiltersSchema.shape,
         ...commonSchemas.pagination.shape,
@@ -27,7 +34,7 @@ export class TemplateController {
       try {
         const { page, limit, ...filters } = req.query as any;
         
-        const result = await TemplateService.getTemplates(
+        const result = await this.templateService.getTemplates(
           filters,
           { page, limit }
         );
@@ -55,12 +62,12 @@ export class TemplateController {
    * Get template by ID
    * GET /templates/:id
    */
-  static getTemplate = [
+  getTemplate = [
     validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { id } = req.params;
-        const template = await TemplateService.getTemplateById(id);
+        const template = await this.templateService.getTemplateById(id);
 
         res.json({
           success: true,
@@ -76,9 +83,9 @@ export class TemplateController {
    * Get template categories
    * GET /templates/categories
    */
-  static getCategories = async (req: Request, res: Response, next: NextFunction) => {
+  getCategories = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const categories = await TemplateService.getCategories();
+      const categories = await this.templateService.getCategories();
 
       res.json({
         success: true,
@@ -93,10 +100,10 @@ export class TemplateController {
    * Get popular templates
    * GET /templates/popular
    */
-  static getPopular = async (req: Request, res: Response, next: NextFunction) => {
+  getPopular = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const limit = parseInt(req.query.limit as string) || 6;
-      const templates = await TemplateService.getPopularTemplates(limit);
+      const templates = await this.templateService.getPopularTemplates(limit);
 
       res.json({
         success: true,
@@ -111,10 +118,10 @@ export class TemplateController {
    * Get featured templates
    * GET /templates/featured
    */
-  static getFeatured = async (req: Request, res: Response, next: NextFunction) => {
+  getFeatured = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const limit = parseInt(req.query.limit as string) || 6;
-      const templates = await TemplateService.getFeaturedTemplates(limit);
+      const templates = await this.templateService.getFeaturedTemplates(limit);
 
       res.json({
         success: true,
@@ -129,8 +136,8 @@ export class TemplateController {
    * Search templates
    * GET /templates/search
    */
-  static searchTemplates = [
-    validateRequest({ 
+  searchTemplates = [
+    validateRequest({
       query: z.object({
         q: z.string().min(1, 'Search query is required'),
         category: z.string().optional(),
@@ -142,7 +149,7 @@ export class TemplateController {
       try {
         const { q, page, limit, ...filters } = req.query as any;
         
-        const result = await TemplateService.searchTemplates(
+        const result = await this.templateService.searchTemplates(
           q,
           filters,
           { page, limit }
@@ -172,8 +179,8 @@ export class TemplateController {
    * Create project from template
    * POST /projects/from-template/:templateId
    */
-  static createFromTemplate = [
-    validateRequest({ 
+  createFromTemplate = [
+    validateRequest({
       params: commonSchemas.idParam,
       body: z.object({
         name: z.string().min(1, 'Project name is required'),
@@ -197,10 +204,10 @@ export class TemplateController {
         }
 
         // Get template
-        const template = await TemplateService.getTemplateById(templateId);
+        const template = await this.templateService.getTemplateById(templateId);
         
         // Create project from template
-        const project = await ProjectService.createProject(userId, {
+        const project = await this.projectService.createProject(userId, {
           name,
           description: description || template.description,
           category: template.category,
@@ -209,7 +216,7 @@ export class TemplateController {
         // Project created successfully
 
         // Increment template usage count
-        await TemplateService.incrementUsageCount(templateId);
+        await this.templateService.incrementUsageCount(templateId);
 
         res.status(201).json({
           success: true,
@@ -229,5 +236,3 @@ export class TemplateController {
     },
   ];
 }
-
-export default TemplateController;

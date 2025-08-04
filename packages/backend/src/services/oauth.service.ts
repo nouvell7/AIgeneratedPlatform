@@ -1,3 +1,4 @@
+import { injectable } from 'tsyringe';
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
 import { JWTService, TokenPair } from '../utils/jwt';
@@ -27,11 +28,12 @@ export interface OAuthResult {
   isNewUser: boolean;
 }
 
+@injectable()
 export class OAuthService {
   /**
    * Handle Google OAuth login
    */
-  static async handleGoogleLogin(accessToken: string): Promise<OAuthResult> {
+  async handleGoogleLogin(accessToken: string): Promise<OAuthResult> {
     try {
       // Get user info from Google
       const userInfo = await this.getGoogleUserInfo(accessToken);
@@ -71,7 +73,7 @@ export class OAuthService {
   /**
    * Handle GitHub OAuth login
    */
-  static async handleGitHubLogin(accessToken: string): Promise<OAuthResult> {
+  async handleGitHubLogin(accessToken: string): Promise<OAuthResult> {
     try {
       // Get user info from GitHub
       const userInfo = await this.getGitHubUserInfo(accessToken);
@@ -111,7 +113,7 @@ export class OAuthService {
   /**
    * Get user info from Google
    */
-  private static async getGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
+  private async getGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
     const response = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -125,7 +127,7 @@ export class OAuthService {
   /**
    * Get user info from GitHub
    */
-  private static async getGitHubUserInfo(accessToken: string): Promise<GitHubUserInfo> {
+  private async getGitHubUserInfo(accessToken: string): Promise<GitHubUserInfo> {
     const response = await axios.get('https://api.github.com/user', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -140,7 +142,7 @@ export class OAuthService {
   /**
    * Find or create user from Google info
    */
-  private static async findOrCreateGoogleUser(userInfo: GoogleUserInfo): Promise<{
+  private async findOrCreateGoogleUser(userInfo: GoogleUserInfo): Promise<{
     user: Omit<User, 'passwordHash'>;
     isNewUser: boolean;
   }> {
@@ -196,10 +198,10 @@ export class OAuthService {
         googleId: userInfo.id,
         profileImage: userInfo.picture,
         role: 'USER',
-        settings: {
+        settings: JSON.stringify({
           notifications: { email: true, push: true },
           privacy: { profilePublic: true, projectsPublic: true },
-        },
+        }),
       },
     });
 
@@ -213,7 +215,7 @@ export class OAuthService {
   /**
    * Find or create user from GitHub info
    */
-  private static async findOrCreateGitHubUser(userInfo: GitHubUserInfo): Promise<{
+  private async findOrCreateGitHubUser(userInfo: GitHubUserInfo): Promise<{
     user: Omit<User, 'passwordHash'>;
     isNewUser: boolean;
   }> {
@@ -269,10 +271,10 @@ export class OAuthService {
         githubId: userInfo.id.toString(),
         profileImage: userInfo.avatar_url,
         role: 'USER',
-        settings: {
+        settings: JSON.stringify({
           notifications: { email: true, push: true },
           privacy: { profilePublic: true, projectsPublic: true },
-        },
+        }),
       },
     });
 
@@ -286,7 +288,7 @@ export class OAuthService {
   /**
    * Generate unique username
    */
-  private static async generateUniqueUsername(baseName: string): Promise<string> {
+  private async generateUniqueUsername(baseName: string): Promise<string> {
     // Clean base name
     let username = baseName
       .toLowerCase()
@@ -321,7 +323,7 @@ export class OAuthService {
   /**
    * Unlink OAuth account
    */
-  static async unlinkOAuthAccount(
+  async unlinkOAuthAccount(
     userId: string,
     provider: 'google' | 'github'
   ): Promise<void> {
@@ -358,5 +360,3 @@ export class OAuthService {
     loggers.auth.oauthUnlink(userId, provider);
   }
 }
-
-export default OAuthService;

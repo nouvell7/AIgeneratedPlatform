@@ -7,6 +7,7 @@ import {
   InsufficientPermissionsError 
 } from '../utils/errors';
 import { loggers } from '../utils/logger';
+import { container } from 'tsyringe'; // tsyringe 컨테이너 임포트
 
 /**
  * Authentication middleware
@@ -107,8 +108,8 @@ export const requireRole = (requiredRole: 'USER' | 'ADMIN') => {
         throw new AuthenticationError('Authentication required');
       }
 
-      // Validate user still exists and has required role
-      await AuthService.validateUserPermissions(req.user.userId, requiredRole);
+      const authService = container.resolve(AuthService); // AuthService 주입
+      await authService.validateUserPermissions(req.user.userId, requiredRole); // 인스턴스 메서드 호출
 
       next();
     } catch (error) {
@@ -291,8 +292,9 @@ export const validateSession = async (
       throw new AuthenticationError('Authentication required');
     }
 
+    const authService = container.resolve(AuthService); // AuthService 주입
     // Check if user still exists and is active
-    const user = await AuthService.getUserProfile(req.user.userId);
+    const user = await authService.getUserProfile(req.user.userId); // 인스턴스 메서드 호출
     
     if (!user) {
       throw new AuthenticationError('User session is no longer valid');

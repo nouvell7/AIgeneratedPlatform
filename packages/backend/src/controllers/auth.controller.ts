@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
+import { injectable, inject } from 'tsyringe';
 import { AuthService } from '../services/auth.service';
 import { validateRequest } from '../lib/validation';
-import { loginSchema, registerSchema } from '../../../shared/src/schemas';
+import { loginSchema, registerSchema } from '@shared/schemas';
 import { z } from 'zod';
 import { logger } from '../utils/logger';
 
@@ -19,16 +20,19 @@ const deleteAccountSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+@injectable()
 export class AuthController {
+  constructor(@inject(AuthService) private authService: AuthService) {}
+
   /**
    * Register a new user
    * POST /auth/register
    */
-  static register = [
+  register = [
     validateRequest({ body: registerSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const result = await AuthService.register(req.body);
+        const result = await this.authService.register(req.body);
 
         res.status(201).json({
           success: true,
@@ -48,11 +52,11 @@ export class AuthController {
    * Login user
    * POST /auth/login
    */
-  static login = [
+  login = [
     validateRequest({ body: loginSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const result = await AuthService.login(req.body);
+        const result = await this.authService.login(req.body);
 
         res.json({
           success: true,
@@ -72,12 +76,12 @@ export class AuthController {
    * Refresh access token
    * POST /auth/refresh
    */
-  static refresh = [
+  refresh = [
     validateRequest({ body: refreshTokenSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { refreshToken } = req.body;
-        const tokens = await AuthService.refreshToken(refreshToken);
+        const tokens = await this.authService.refreshToken(refreshToken);
 
         res.json({
           success: true,
@@ -94,7 +98,7 @@ export class AuthController {
    * Get current user profile
    * GET /auth/profile
    */
-  static getProfile = async (req: Request, res: Response, next: NextFunction) => {
+  getProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
       if (!userId) {
@@ -107,7 +111,7 @@ export class AuthController {
         });
       }
 
-      const user = await AuthService.getUserProfile(userId);
+      const user = await this.authService.getUserProfile(userId);
 
       res.json({
         success: true,
@@ -122,7 +126,7 @@ export class AuthController {
    * Update user profile
    * PUT /auth/profile
    */
-  static updateProfile = async (req: Request, res: Response, next: NextFunction) => {
+  updateProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
       if (!userId) {
@@ -135,7 +139,7 @@ export class AuthController {
         });
       }
 
-      const user = await AuthService.updateProfile(userId, req.body);
+      const user = await this.authService.updateProfile(userId, req.body);
 
       res.json({
         success: true,
@@ -151,7 +155,7 @@ export class AuthController {
    * Change password
    * POST /auth/change-password
    */
-  static changePassword = [
+  changePassword = [
     validateRequest({ body: changePasswordSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -167,7 +171,7 @@ export class AuthController {
         }
 
         const { currentPassword, newPassword } = req.body;
-        await AuthService.changePassword(userId, currentPassword, newPassword);
+        await this.authService.changePassword(userId, currentPassword, newPassword);
 
         res.json({
           success: true,
@@ -183,7 +187,7 @@ export class AuthController {
    * Delete user account
    * DELETE /auth/account
    */
-  static deleteAccount = [
+  deleteAccount = [
     validateRequest({ body: deleteAccountSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -199,7 +203,7 @@ export class AuthController {
         }
 
         const { password } = req.body;
-        await AuthService.deleteAccount(userId, password);
+        await this.authService.deleteAccount(userId, password);
 
         res.json({
           success: true,
@@ -215,7 +219,7 @@ export class AuthController {
    * Logout user (client-side token removal)
    * POST /auth/logout
    */
-  static logout = async (req: Request, res: Response, next: NextFunction) => {
+  logout = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
       if (userId) {
@@ -231,5 +235,3 @@ export class AuthController {
     }
   };
 }
-
-export default AuthController;

@@ -1,7 +1,8 @@
+import { injectable } from 'tsyringe';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, ConflictError, ValidationError } from '../utils/errors';
 import { loggers } from '../utils/logger';
-import { User } from '@prisma/client';
+import { User, Prisma } from '@prisma/client'; // Import User and Prisma types
 
 export interface UpdateProfileData {
   username?: string;
@@ -14,13 +15,15 @@ export interface UserStats {
   totalRevenue: number;
   communityPosts: number;
   communityVotes: number;
+  // Add more stats as needed
 }
 
+@injectable()
 export class UserService {
   /**
    * Get user profile by ID
    */
-  static async getUserProfile(userId: string): Promise<Omit<User, 'passwordHash'>> {
+  async getUserProfile(userId: string): Promise<Omit<User, 'passwordHash'>> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -36,7 +39,7 @@ export class UserService {
   /**
    * Get public user profile (limited information)
    */
-  static async getPublicProfile(userId: string): Promise<{
+  async getPublicProfile(userId: string): Promise<{
     id: string;
     username: string;
     profileImage?: string | null;
@@ -59,7 +62,7 @@ export class UserService {
     }
 
     // Check if profile is public
-    const settings = user.settings as any;
+    const settings = user.settings ? JSON.parse(user.settings) : {};
     if (!settings?.privacy?.profilePublic) {
       throw new NotFoundError('User profile is private');
     }
@@ -79,7 +82,7 @@ export class UserService {
   /**
    * Update user profile
    */
-  static async updateProfile(
+  async updateProfile(
     userId: string,
     data: UpdateProfileData
   ): Promise<Omit<User, 'passwordHash'>> {
@@ -124,7 +127,7 @@ export class UserService {
   /**
    * Upload profile image
    */
-  static async uploadProfileImage(
+  async uploadProfileImage(
     userId: string,
     imageUrl: string
   ): Promise<Omit<User, 'passwordHash'>> {
@@ -150,7 +153,7 @@ export class UserService {
   /**
    * Get user statistics
    */
-  static async getUserStats(userId: string): Promise<UserStats> {
+  async getUserStats(userId: string): Promise<UserStats> {
     const [
       totalProjects,
       deployedProjects,
@@ -209,7 +212,7 @@ export class UserService {
   /**
    * Search users by username
    */
-  static async searchUsers(
+  async searchUsers(
     query: string,
     limit: number = 10,
     offset: number = 0
@@ -222,42 +225,37 @@ export class UserService {
     }>;
     total: number;
   }> {
-    const whereClause = {
-      username: {
-        contains: query.toLowerCase(),
-        mode: 'insensitive' as const,
+    // Prisma doesn't directly support JSON path filters in where clause for String fields
+    // We'll fetch all users and filter in memory, or use raw SQL if performance is critical
+    const allUsers = await prisma.user.findMany({
+      select: {
+        id: true,
+        username: true,
+        profileImage: true,
+        createdAt: true,
+        settings: true,
       },
-      settings: {
-        path: ['privacy', 'profilePublic'],
-        equals: true,
-      },
-    };
+      orderBy: {
+        username: 'asc',
+      }
+    });
 
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where: whereClause,
-        select: {
-          id: true,
-          username: true,
-          profileImage: true,
-          createdAt: true,
-        },
-        take: limit,
-        skip: offset,
-        orderBy: {
-          username: 'asc',
-        },
-      }),
-      prisma.user.count({ where: whereClause }),
-    ]);
+    const filteredUsers = allUsers.filter(user => {
+      const settings = user.settings ? JSON.parse(user.settings) : {};
+      const isPublicProfile = settings?.privacy?.profilePublic === true;
+      const matchesQuery = user.username.toLowerCase().includes(query.toLowerCase());
+      return isPublicProfile && matchesQuery;
+    });
 
-    return { users, total };
+    const paginatedUsers = filteredUsers.slice(offset, offset + limit);
+
+    return { users: paginatedUsers, total: filteredUsers.length };
   }
 
   /**
    * Get user activity feed
    */
-  static async getUserActivity(
+  async getUserActivity(
     userId: string,
     limit: number = 20,
     offset: number = 0
@@ -325,7 +323,7 @@ export class UserService {
   /**
    * Delete user account and all related data
    */
-  static async deleteUserAccount(userId: string): Promise<void> {
+  async deleteUserAccount(userId: string): Promise<void> {
     // This will cascade delete all related records due to Prisma schema constraints
     await prisma.user.delete({
       where: { id: userId },
@@ -337,7 +335,7 @@ export class UserService {
   /**
    * Get users leaderboard
    */
-  static async getLeaderboard(
+  async getLeaderboard(
     type: 'projects' | 'revenue' | 'community',
     limit: number = 10
   ): Promise<Array<{
@@ -349,9 +347,6 @@ export class UserService {
     score: number;
     rank: number;
   }>> {
-    let orderBy: any;
-    let scoreField: string;
-
     switch (type) {
       case 'projects':
         // Order by number of deployed projects
@@ -367,12 +362,10 @@ export class UserService {
                 },
               },
             },
+            settings: true, // Select settings to filter by profilePublic
           },
           where: {
-            settings: {
-              path: ['privacy', 'profilePublic'],
-              equals: true,
-            },
+            // Filter by profilePublic in memory if direct JSON filter is not supported
           },
           orderBy: {
             projects: {
@@ -382,7 +375,13 @@ export class UserService {
           take: limit,
         });
 
-        return projectCounts.map((user, index) => ({
+        // Filter in memory for profilePublic
+        const filteredProjectCounts = projectCounts.filter(user => {
+          const settings = user.settings ? JSON.parse(user.settings) : {};
+          return settings?.privacy?.profilePublic === true;
+        });
+
+        return filteredProjectCounts.map((user, index) => ({
           user: {
             id: user.id,
             username: user.username,
@@ -405,17 +404,21 @@ export class UserService {
                 votes: true,
               },
             },
+            settings: true, // Select settings to filter by profilePublic
           },
           where: {
-            settings: {
-              path: ['privacy', 'profilePublic'],
-              equals: true,
-            },
+            // Filter by profilePublic in memory
           },
           take: limit,
         });
 
-        return communityScores
+        // Filter in memory for profilePublic
+        const filteredCommunityScores = communityScores.filter(user => {
+          const settings = user.settings ? JSON.parse(user.settings) : {};
+          return settings?.privacy?.profilePublic === true;
+        });
+
+        return filteredCommunityScores
           .map(user => ({
             user: {
               id: user.id,
@@ -434,5 +437,3 @@ export class UserService {
     }
   }
 }
-
-export default UserService;

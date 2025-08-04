@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { injectable, inject } from 'tsyringe';
 import { UserService } from '../services/user.service';
 import { validateRequest, commonSchemas } from '../lib/validation';
 import { z } from 'zod';
@@ -29,12 +30,15 @@ const activitySchema = z.object({
   offset: z.string().transform(val => parseInt(val, 10)).pipe(z.number().min(0)).default('0'),
 });
 
+@injectable()
 export class UserController {
+  constructor(@inject(UserService) private userService: UserService) {}
+
   /**
    * Get current user profile
    * GET /users/profile
    */
-  static getProfile = async (req: Request, res: Response, next: NextFunction) => {
+  getProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
       if (!userId) {
@@ -47,7 +51,7 @@ export class UserController {
         });
       }
 
-      const user = await UserService.getUserProfile(userId);
+      const user = await this.userService.getUserProfile(userId);
 
       res.json({
         success: true,
@@ -62,12 +66,12 @@ export class UserController {
    * Get public user profile
    * GET /users/:id/profile
    */
-  static getPublicProfile = [
+  getPublicProfile = [
     validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { id } = req.params;
-        const profile = await UserService.getPublicProfile(id);
+        const profile = await this.userService.getPublicProfile(id);
 
         res.json({
           success: true,
@@ -83,7 +87,7 @@ export class UserController {
    * Update user profile
    * PUT /users/profile
    */
-  static updateProfile = [
+  updateProfile = [
     validateRequest({ body: updateProfileSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -98,7 +102,7 @@ export class UserController {
           });
         }
 
-        const user = await UserService.updateProfile(userId, req.body);
+        const user = await this.userService.updateProfile(userId, req.body);
 
         res.json({
           success: true,
@@ -115,7 +119,7 @@ export class UserController {
    * Upload profile image
    * POST /users/profile/image
    */
-  static uploadProfileImage = [
+  uploadProfileImage = [
     validateRequest({ body: uploadImageSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -131,7 +135,7 @@ export class UserController {
         }
 
         const { imageUrl } = req.body;
-        const user = await UserService.uploadProfileImage(userId, imageUrl);
+        const user = await this.userService.uploadProfileImage(userId, imageUrl);
 
         res.json({
           success: true,
@@ -148,7 +152,7 @@ export class UserController {
    * Get user statistics
    * GET /users/stats
    */
-  static getStats = async (req: Request, res: Response, next: NextFunction) => {
+  getStats = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
       if (!userId) {
@@ -161,7 +165,7 @@ export class UserController {
         });
       }
 
-      const stats = await UserService.getUserStats(userId);
+      const stats = await this.userService.getUserStats(userId);
 
       res.json({
         success: true,
@@ -176,12 +180,12 @@ export class UserController {
    * Get public user statistics
    * GET /users/:id/stats
    */
-  static getPublicStats = [
+  getPublicStats = [
     validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { id } = req.params;
-        const stats = await UserService.getUserStats(id);
+        const stats = await this.userService.getUserStats(id);
 
         res.json({
           success: true,
@@ -197,12 +201,12 @@ export class UserController {
    * Search users
    * GET /users/search
    */
-  static searchUsers = [
+  searchUsers = [
     validateRequest({ query: searchUsersSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { q, limit, offset } = req.query as any;
-        const result = await UserService.searchUsers(q, limit, offset);
+        const result = await this.userService.searchUsers(q, limit, offset);
 
         res.json({
           success: true,
@@ -226,7 +230,7 @@ export class UserController {
    * Get user activity feed
    * GET /users/activity
    */
-  static getActivity = [
+  getActivity = [
     validateRequest({ query: activitySchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -242,7 +246,7 @@ export class UserController {
         }
 
         const { limit, offset } = req.query as any;
-        const activities = await UserService.getUserActivity(userId, limit, offset);
+        const activities = await this.userService.getUserActivity(userId, limit, offset);
 
         res.json({
           success: true,
@@ -265,7 +269,7 @@ export class UserController {
    * Get public user activity
    * GET /users/:id/activity
    */
-  static getPublicActivity = [
+  getPublicActivity = [
     validateRequest({ 
       params: commonSchemas.idParam,
       query: activitySchema,
@@ -276,9 +280,9 @@ export class UserController {
         const { limit, offset } = req.query as any;
         
         // First check if user profile is public
-        await UserService.getPublicProfile(id);
+        await this.userService.getPublicProfile(id);
         
-        const activities = await UserService.getUserActivity(id, limit, offset);
+        const activities = await this.userService.getUserActivity(id, limit, offset);
 
         res.json({
           success: true,
@@ -301,12 +305,12 @@ export class UserController {
    * Get users leaderboard
    * GET /users/leaderboard
    */
-  static getLeaderboard = [
+  getLeaderboard = [
     validateRequest({ query: leaderboardSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { type, limit } = req.query as any;
-        const leaderboard = await UserService.getLeaderboard(type, limit);
+        const leaderboard = await this.userService.getLeaderboard(type, limit);
 
         res.json({
           success: true,
@@ -326,7 +330,7 @@ export class UserController {
    * Delete user account
    * DELETE /users/account
    */
-  static deleteAccount = async (req: Request, res: Response, next: NextFunction) => {
+  deleteAccount = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
       if (!userId) {
@@ -339,7 +343,7 @@ export class UserController {
         });
       }
 
-      await UserService.deleteUserAccount(userId);
+      await this.userService.deleteUserAccount(userId);
 
       res.json({
         success: true,

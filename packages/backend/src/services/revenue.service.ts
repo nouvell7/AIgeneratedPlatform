@@ -1,7 +1,8 @@
-import { prisma } from '../lib/database';
+import { injectable, inject } from 'tsyringe';
+import { prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
 import { AppError } from '../utils/errors';
-import { adsenseService } from './adsense.service';
+import { AdSenseService } from './adsense.service';
 
 export interface RevenueDashboardData {
   totalEarnings: number;
@@ -62,7 +63,7 @@ export interface RevenueAnalytics {
     }>;
   };
   optimizationSuggestions: Array<{
-    type: 'placement' | 'format' | 'targeting' | 'content';
+    type: 'placement' | 'format' | 'targeting' | 'content' | 'technical';
     title: string;
     description: string;
     potentialIncrease: number;
@@ -75,7 +76,10 @@ export interface RevenueAnalytics {
   };
 }
 
-class RevenueService {
+@injectable()
+export class RevenueService {
+  constructor(@inject(AdSenseService) private adsenseService: AdSenseService) {}
+
   /**
    * Get revenue dashboard data
    */
@@ -98,7 +102,7 @@ class RevenueService {
         throw new AppError('You can only view revenue data for your own projects', 403);
       }
 
-      const revenue = project.revenue as any;
+      const revenue = project.revenue ? JSON.parse(project.revenue) : null;
       if (!revenue?.adsenseEnabled) {
         // Return empty dashboard if AdSense is not connected
         return this.getEmptyDashboard();
@@ -124,7 +128,7 @@ class RevenueService {
       }
 
       // Get revenue data from AdSense
-      const revenueData = await adsenseService.getRevenueData(projectId, userId, {
+      const revenueData = await this.adsenseService.getRevenueData(projectId, userId, {
         startDate: startDate.toISOString().split('T')[0],
         endDate: endDate.toISOString().split('T')[0],
       });
@@ -289,19 +293,16 @@ class RevenueService {
     }>;
   }> {
     try {
-      // Get all user projects with revenue enabled
+      // Get all user projects
       const projects = await prisma.project.findMany({
         where: {
           userId,
-          revenue: {
-            path: ['adsenseEnabled'],
-            equals: true,
-          },
         },
       });
 
       let totalEarnings = 0;
       let monthlyEarnings = 0;
+      let activeProjectsCount = 0; // Track count of projects with AdSense enabled
       let topProject: { id: string; name: string; earnings: number } | null = null;
       const recentActivity: Array<{
         projectId: string;
@@ -312,6 +313,12 @@ class RevenueService {
 
       // Calculate summary data for each project
       for (const project of projects) {
+        const revenue = project.revenue ? JSON.parse(project.revenue) : null;
+        if (!revenue?.adsenseEnabled) {
+          continue; // Skip projects without AdSense enabled
+        }
+        activeProjectsCount++;
+
         try {
           const dashboardData = await this.getRevenueDashboard(project.id, userId, '30d');
           
@@ -336,7 +343,7 @@ class RevenueService {
           });
         } catch (error) {
           // Skip projects with errors
-          logger.warn('Failed to get revenue data for project', { projectId: project.id });
+          logger.warn('Failed to get revenue data for project', { projectId: project.id, error: (error as Error).message });
         }
       }
 
@@ -346,7 +353,7 @@ class RevenueService {
       return {
         totalEarnings,
         monthlyEarnings,
-        activeProjects: projects.length,
+        activeProjects: activeProjectsCount,
         topProject,
         recentActivity: recentActivity.slice(0, 5), // Top 5 recent activities
       };
@@ -460,5 +467,3 @@ class RevenueService {
     };
   }
 }
-
-export const revenueService = new RevenueService();

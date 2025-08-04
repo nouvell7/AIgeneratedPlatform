@@ -1,7 +1,10 @@
-import { prisma } from '../lib/database';
+import { injectable, inject } from 'tsyringe';
+import { prisma } from '../lib/prisma'; // Corrected import path
 import { logger } from '../utils/logger';
-import { AppError } from '../utils/errors';
+import { AppError, ValidationError } from '../utils/errors';
 import { Octokit } from '@octokit/rest';
+import { ProjectService } from './project.service'; // Import ProjectService
+import { generateStaticPage } from '../utils/static-page-generator'; // Import static page generator
 
 export interface DeploymentConfig {
   platform: 'cloudflare-pages' | 'vercel' | 'netlify';
@@ -18,25 +21,44 @@ export interface DeploymentStatus {
   platform: string;
   url?: string;
   previewUrl?: string;
-  buildLogs?: string[];
+  // buildLogs?: string[]; // 제거
   error?: string;
   createdAt: Date;
   updatedAt: Date;
   completedAt?: Date;
 }
 
-export interface DeploymentLog {
-  id: string;
-  deploymentId: string;
+export interface LogEntry {
   level: 'info' | 'warn' | 'error';
   message: string;
-  timestamp: Date;
+  timestamp: string;
 }
 
-class DeploymentService {
+export interface DeploymentRecord {
+  id: string;
+  projectId: string;
+  status: string;
+  platform: string;
+  configuration: string; // Record<string, any> -> string (JSON string)
+  isRollback?: boolean;
+  rollbackFromId?: string;
+  url?: string; // 다시 추가
+  previewUrl?: string; // 다시 추가
+  // buildLogs?: string[]; // 제거
+  error?: string;
+  createdAt: Date;
+  updatedAt: Date; // 다시 추가
+  completedAt?: Date; // 다시 추가
+  logs?: string; // LogEntry[] -> string (JSON string)
+}
+
+@injectable()
+export class DeploymentService {
   private octokit: Octokit;
 
-  constructor() {
+  constructor(
+    @inject(ProjectService) private projectService: ProjectService // Inject ProjectService
+  ) {
     const githubToken = process.env.GITHUB_TOKEN;
     if (!githubToken) {
       throw new AppError('GitHub token is required for deployment', 500);
@@ -57,9 +79,7 @@ class DeploymentService {
   ): Promise<DeploymentStatus> {
     try {
       // Check if project exists and user owns it
-      const project = await prisma.project.findUnique({
-        where: { id: projectId },
-      });
+      const project = await this.projectService.getProjectById(projectId, userId);
 
       if (!project) {
         throw new AppError('Project not found', 404);
@@ -75,20 +95,32 @@ class DeploymentService {
           projectId,
           status: 'pending',
           platform: config.platform,
-          configuration: config as any,
+          configuration: JSON.stringify(config), // config 객체를 JSON 문자열로 변환
         },
-      });
+      }) as unknown as DeploymentRecord; // Cast to new interface
 
       logger.info('Deployment started', { deploymentId: deployment.id, projectId });
 
-      // Start deployment process based on platform
-      this.processDeployment(deployment.id, config);
+      if (project.projectType === 'NO_CODE') {
+        // For No-Code projects, generate static HTML and simulate deployment
+        if (!project.pageContent) {
+          throw new ValidationError('No-Code project must have page content to deploy.');
+        }
+        const htmlContent = generateStaticPage(project.pageContent as unknown as Record<string, any>);
+        
+        // Simulate static site deployment
+        await this.simulateStaticSiteDeployment(deployment.id, htmlContent);
+        
+      } else {
+        // For Low-Code projects, proceed with existing codespaces/repo-based deployment logic
+        this.processDeployment(deployment.id, config);
+      }
 
       return {
         id: deployment.id,
         projectId: deployment.projectId,
-        status: deployment.status as any,
-        platform: deployment.platform,
+        status: 'pending', // Initial status
+        platform: config.platform,
         createdAt: deployment.createdAt,
         updatedAt: deployment.updatedAt,
       };
@@ -151,7 +183,7 @@ class DeploymentService {
     projectId: string,
     userId: string,
     deploymentId?: string
-  ): Promise<DeploymentLog[]> {
+  ): Promise<LogEntry[]> {
     try {
       // Check if project exists and user owns it
       const project = await prisma.project.findUnique({
@@ -166,16 +198,16 @@ class DeploymentService {
         throw new AppError('You can only view your own project logs', 403);
       }
 
-      let deployment;
+      let deployment: DeploymentRecord | null;
       if (deploymentId) {
         deployment = await prisma.deploymentLog.findUnique({
           where: { id: deploymentId },
-        });
+        }) as unknown as DeploymentRecord | null;
       } else {
         deployment = await prisma.deploymentLog.findFirst({
           where: { projectId },
           orderBy: { createdAt: 'desc' },
-        });
+        }) as unknown as DeploymentRecord | null;
       }
 
       if (!deployment) {
@@ -183,14 +215,14 @@ class DeploymentService {
       }
 
       // Get logs from deployment record
-      const logs = deployment.logs as any[] || [];
+      const logs = JSON.parse(deployment.logs || '[]') as LogEntry[]; // logs 필드를 JSON 문자열로 파싱
       
-      return logs.map((log, index) => ({
-        id: `${deployment.id}-${index}`,
+      return logs.map((log: LogEntry, index) => ({
+        id: `${deployment.id}-${index}`, // This ID is for the log entry, not the deployment record
         deploymentId: deployment.id,
-        level: log.level || 'info',
-        message: log.message || '',
-        timestamp: new Date(log.timestamp || deployment.createdAt),
+        level: log.level,
+        message: log.message,
+        timestamp: new Date(log.timestamp).toISOString(), // Convert Date object to ISO string
       }));
     } catch (error: any) {
       logger.error('Failed to get deployment logs', { error: error.message, projectId });
@@ -225,7 +257,7 @@ class DeploymentService {
         where: { id: deploymentId },
         data: {
           status: 'cancelled',
-          completedAt: new Date(),
+          completedAt: new Date(), // 다시 추가
         },
       });
 
@@ -277,11 +309,11 @@ class DeploymentService {
           projectId,
           status: 'pending',
           platform: targetDeployment.platform,
-          configuration: targetDeployment.configuration,
+          configuration: targetDeployment.configuration, // config 객체를 JSON 문자열로 변환
           isRollback: true,
           rollbackFromId: targetDeploymentId,
         },
-      });
+      }) as unknown as DeploymentRecord;
 
       logger.info('Rollback deployment started', { 
         deploymentId: rollbackDeployment.id, 
@@ -290,7 +322,7 @@ class DeploymentService {
       });
 
       // Start rollback process
-      this.processRollback(rollbackDeployment.id, targetDeployment);
+      this.processRollback(rollbackDeployment.id, targetDeployment as DeploymentRecord);
 
       return {
         id: rollbackDeployment.id,
@@ -298,7 +330,7 @@ class DeploymentService {
         status: rollbackDeployment.status as any,
         platform: rollbackDeployment.platform,
         createdAt: rollbackDeployment.createdAt,
-        updatedAt: rollbackDeployment.updatedAt,
+        updatedAt: rollbackDeployment.updatedAt, // 다시 추가
       };
     } catch (error: any) {
       logger.error('Failed to rollback deployment', { error: error.message, projectId });
@@ -419,13 +451,13 @@ class DeploymentService {
         where: { id: deploymentId },
         data: {
           status: 'building',
-          logs: [
+          logs: JSON.stringify([
             {
               level: 'info',
               message: 'Starting deployment process...',
               timestamp: new Date().toISOString(),
             },
-          ],
+          ]),
         },
       });
 
@@ -440,7 +472,7 @@ class DeploymentService {
         data: {
           status: 'failed',
           error: error.message,
-          completedAt: new Date(),
+          completedAt: new Date(), // 다시 추가
         },
       });
     }
@@ -449,25 +481,25 @@ class DeploymentService {
   /**
    * Process rollback (background task)
    */
-  private async processRollback(deploymentId: string, targetDeployment: any): Promise<void> {
+  private async processRollback(deploymentId: string, targetDeployment: DeploymentRecord): Promise<void> {
     try {
       // Update status to building
       await prisma.deploymentLog.update({
         where: { id: deploymentId },
         data: {
           status: 'building',
-          logs: [
+          logs: JSON.stringify([
             {
               level: 'info',
               message: `Rolling back to deployment ${targetDeployment.id}...`,
               timestamp: new Date().toISOString(),
             },
-          ],
+          ]),
         },
       });
 
       // Simulate rollback process
-      await this.simulateRollbackProcess(deploymentId, targetDeployment);
+      this.simulateRollbackProcess(deploymentId, targetDeployment);
 
     } catch (error: any) {
       logger.error('Rollback process failed', { error: error.message, deploymentId });
@@ -477,7 +509,7 @@ class DeploymentService {
         data: {
           status: 'failed',
           error: error.message,
-          completedAt: new Date(),
+          completedAt: new Date(), // 다시 추가
         },
       });
     }
@@ -500,13 +532,15 @@ class DeploymentService {
     for (let i = 0; i < steps.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate work
 
-      const logs = [
-        {
-          level: 'info',
-          message: steps[i],
-          timestamp: new Date().toISOString(),
-        },
-      ];
+      const logEntry = { // logs[0] 대신 logEntry 변수 사용
+        level: 'info',
+        message: steps[i],
+        timestamp: new Date().toISOString(),
+      };
+
+      const existingDeployment = await prisma.deploymentLog.findUnique({ where: { id: deploymentId } });
+      const existingLogs = existingDeployment?.logs ? JSON.parse(existingDeployment.logs) : [];
+      const updatedLogs = [...existingLogs, logEntry];
 
       if (i === steps.length - 1) {
         // Final step - mark as success
@@ -518,15 +552,64 @@ class DeploymentService {
             status: 'success',
             url: deploymentUrl,
             previewUrl: deploymentUrl,
-            completedAt: new Date(),
-            logs: { push: logs[0] },
+            completedAt: new Date(), // 다시 추가
+            logs: JSON.stringify(updatedLogs), // JSON 문자열로 저장
           },
         });
       } else {
         await prisma.deploymentLog.update({
           where: { id: deploymentId },
           data: {
-            logs: { push: logs[0] },
+            logs: JSON.stringify(updatedLogs), // JSON 문자열로 저장
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Simulate static site deployment
+   */
+  private async simulateStaticSiteDeployment(deploymentId: string, htmlContent: string): Promise<void> {
+    const steps = [
+      'Generating static page...',
+      'Uploading HTML to CDN...',
+      'Configuring domain...',
+      'Deployment complete!',
+    ];
+
+    for (let i = 0; i < steps.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate work
+
+      const logEntry = { // logs[0] 대신 logEntry 변수 사용
+        level: 'info',
+        message: steps[i],
+        timestamp: new Date().toISOString(),
+      };
+
+      const existingDeployment = await prisma.deploymentLog.findUnique({ where: { id: deploymentId } });
+      const existingLogs = existingDeployment?.logs ? JSON.parse(existingDeployment.logs) : [];
+      const updatedLogs = [...existingLogs, logEntry];
+
+      if (i === steps.length - 1) {
+        // Final step - mark as success
+        const deploymentUrl = `https://${deploymentId}-nocode.example.com`; // Unique URL for no-code
+        
+        await prisma.deploymentLog.update({
+          where: { id: deploymentId },
+          data: {
+            status: 'success',
+            url: deploymentUrl,
+            previewUrl: deploymentUrl,
+            completedAt: new Date(), // 다시 추가
+            logs: JSON.stringify(updatedLogs), // JSON 문자열로 저장
+          },
+        });
+      } else {
+        await prisma.deploymentLog.update({
+          where: { id: deploymentId },
+          data: {
+            logs: JSON.stringify(updatedLogs), // JSON 문자열로 저장
           },
         });
       }
@@ -536,7 +619,7 @@ class DeploymentService {
   /**
    * Simulate rollback process
    */
-  private async simulateRollbackProcess(deploymentId: string, targetDeployment: any): Promise<void> {
+  private async simulateRollbackProcess(deploymentId: string, targetDeployment: DeploymentRecord): Promise<void> {
     const steps = [
       'Preparing rollback...',
       'Switching to previous version...',
@@ -547,13 +630,15 @@ class DeploymentService {
     for (let i = 0; i < steps.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate work
 
-      const logs = [
-        {
-          level: 'info',
-          message: steps[i],
-          timestamp: new Date().toISOString(),
-        },
-      ];
+      const logEntry = { // logs[0] 대신 logEntry 변수 사용
+        level: 'info',
+        message: steps[i],
+        timestamp: new Date().toISOString(),
+      };
+
+      const existingDeployment = await prisma.deploymentLog.findUnique({ where: { id: deploymentId } });
+      const existingLogs = existingDeployment?.logs ? JSON.parse(existingDeployment.logs) : [];
+      const updatedLogs = [...existingLogs, logEntry];
 
       if (i === steps.length - 1) {
         // Final step - mark as success
@@ -563,20 +648,18 @@ class DeploymentService {
             status: 'success',
             url: targetDeployment.url,
             previewUrl: targetDeployment.previewUrl,
-            completedAt: new Date(),
-            logs: { push: logs[0] },
+            completedAt: new Date(), // 다시 추가
+            logs: JSON.stringify(updatedLogs), // JSON 문자열로 저장
           },
         });
       } else {
         await prisma.deploymentLog.update({
           where: { id: deploymentId },
           data: {
-            logs: { push: logs[0] },
+            logs: JSON.stringify(updatedLogs), // JSON 문자열로 저장
           },
         });
       }
     }
   }
 }
-
-export const deploymentService = new DeploymentService();

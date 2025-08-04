@@ -1,3 +1,4 @@
+import { injectable } from 'tsyringe';
 import { prisma } from '../lib/prisma';
 import { JWTService, TokenPair } from '../utils/jwt';
 import { PasswordService } from '../utils/password';
@@ -26,11 +27,12 @@ export interface AuthResult {
   tokens: TokenPair;
 }
 
+@injectable()
 export class AuthService {
   /**
    * Register a new user
    */
-  static async register(data: RegisterData): Promise<AuthResult> {
+  async register(data: RegisterData): Promise<AuthResult> {
     const { email, username, password } = data;
 
     // Validate password strength
@@ -67,10 +69,10 @@ export class AuthService {
         username: username.toLowerCase(),
         passwordHash,
         role: 'USER',
-        settings: {
+        settings: JSON.stringify({
           notifications: { email: true, push: true },
           privacy: { profilePublic: true, projectsPublic: true },
-        },
+        }),
       },
     });
 
@@ -96,7 +98,7 @@ export class AuthService {
   /**
    * Login with email and password
    */
-  static async login(credentials: LoginCredentials): Promise<AuthResult> {
+  async login(credentials: LoginCredentials): Promise<AuthResult> {
     const { email, password } = credentials;
 
     // Find user by email
@@ -136,7 +138,7 @@ export class AuthService {
   /**
    * Refresh access token using refresh token
    */
-  static async refreshToken(refreshToken: string): Promise<TokenPair> {
+  async refreshToken(refreshToken: string): Promise<TokenPair> {
     // Verify refresh token
     const payload = JWTService.verifyRefreshToken(refreshToken);
 
@@ -162,7 +164,7 @@ export class AuthService {
   /**
    * Get user profile by ID
    */
-  static async getUserProfile(userId: string): Promise<Omit<User, 'passwordHash'>> {
+  async getUserProfile(userId: string): Promise<Omit<User, 'passwordHash'>> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -179,7 +181,7 @@ export class AuthService {
   /**
    * Update user profile
    */
-  static async updateProfile(
+  async updateProfile(
     userId: string, 
     data: Partial<Pick<User, 'username' | 'profileImage' | 'settings'>>
   ): Promise<Omit<User, 'passwordHash'>> {
@@ -215,7 +217,7 @@ export class AuthService {
   /**
    * Change user password
    */
-  static async changePassword(
+  async changePassword(
     userId: string,
     currentPassword: string,
     newPassword: string
@@ -266,7 +268,7 @@ export class AuthService {
   /**
    * Delete user account
    */
-  static async deleteAccount(userId: string, password: string): Promise<void> {
+  async deleteAccount(userId: string, password: string): Promise<void> {
     // Find user
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -293,7 +295,7 @@ export class AuthService {
   /**
    * Validate user permissions
    */
-  static async validateUserPermissions(
+  async validateUserPermissions(
     userId: string,
     requiredRole: 'USER' | 'ADMIN' = 'USER'
   ): Promise<User> {
@@ -312,5 +314,3 @@ export class AuthService {
     return user;
   }
 }
-
-export default AuthService;

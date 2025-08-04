@@ -1,16 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
-import { AIModelService, AIModelConfig } from '../services/ai-model.service';
+import { injectable, inject } from 'tsyringe';
+import { AIModelService } from '../services/ai-model.service';
 import { validateRequest, commonSchemas } from '../lib/validation';
-import { aiModelConfigSchema } from '../../../shared/src/schemas';
+import { aiModelSchema as aiModelConfigSchema } from '@shared/schemas';
 import { z } from 'zod';
 
+@injectable()
 export class AIModelController {
+  constructor(@inject(AIModelService) private aiModelService: AIModelService) {}
+
   /**
    * Connect AI model to project
    * POST /projects/:id/ai-model
    */
-  static connectModel = [
-    validateRequest({ 
+  connectModel = [
+    validateRequest({
       params: commonSchemas.idParam,
       body: aiModelConfigSchema,
     }),
@@ -29,7 +33,7 @@ export class AIModelController {
           });
         }
 
-        await AIModelService.connectModel(projectId, userId, req.body);
+        await this.aiModelService.connectModel(projectId, userId, req.body);
 
         res.json({
           success: true,
@@ -45,7 +49,7 @@ export class AIModelController {
    * Disconnect AI model from project
    * DELETE /projects/:id/ai-model
    */
-  static disconnectModel = [
+  disconnectModel = [
     validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -62,7 +66,7 @@ export class AIModelController {
           });
         }
 
-        await AIModelService.disconnectModel(projectId, userId);
+        await this.aiModelService.disconnectModel(projectId, userId);
 
         res.json({
           success: true,
@@ -78,14 +82,14 @@ export class AIModelController {
    * Get project's AI model configuration
    * GET /projects/:id/ai-model
    */
-  static getModelConfig = [
+  getModelConfig = [
     validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { id: projectId } = req.params;
         const userId = req.user?.userId;
 
-        const modelConfig = await AIModelService.getModelConfig(projectId, userId);
+        const modelConfig = await this.aiModelService.getModelConfig(projectId, userId);
 
         res.json({
           success: true,
@@ -101,11 +105,11 @@ export class AIModelController {
    * Test AI model connection
    * POST /ai-models/test
    */
-  static testModel = [
+  testModel = [
     validateRequest({ body: aiModelConfigSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const result = await AIModelService.testModel(req.body);
+        const result = await this.aiModelService.testModel(req.body);
 
         res.json({
           success: result.status === 'success',
@@ -122,9 +126,9 @@ export class AIModelController {
    * Get supported model types
    * GET /ai-models/types
    */
-  static getSupportedTypes = async (req: Request, res: Response, next: NextFunction) => {
+  getSupportedTypes = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const types = AIModelService.getSupportedModelTypes();
+      const types = this.aiModelService.getSupportedModelTypes();
 
       res.json({
         success: true,
@@ -139,8 +143,8 @@ export class AIModelController {
    * Get model type configuration schema
    * GET /ai-models/types/:type/schema
    */
-  static getTypeSchema = [
-    validateRequest({ 
+  getTypeSchema = [
+    validateRequest({
       params: z.object({
         type: z.enum(['teachable-machine', 'huggingface', 'custom']),
       }),
@@ -148,7 +152,7 @@ export class AIModelController {
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { type } = req.params;
-        const types = AIModelService.getSupportedModelTypes();
+        const types = this.aiModelService.getSupportedModelTypes();
         const typeInfo = types.find(t => t.type === type);
 
         if (!typeInfo) {
@@ -181,7 +185,7 @@ export class AIModelController {
    * Validate model configuration
    * POST /ai-models/validate
    */
-  static validateConfig = [
+  validateConfig = [
     validateRequest({ body: aiModelConfigSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -205,8 +209,8 @@ export class AIModelController {
    * Get model integration guide
    * GET /ai-models/guide/:type
    */
-  static getIntegrationGuide = [
-    validateRequest({ 
+  getIntegrationGuide = [
+    validateRequest({
       params: z.object({
         type: z.enum(['teachable-machine', 'huggingface', 'custom']),
       }),
@@ -214,7 +218,7 @@ export class AIModelController {
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { type } = req.params;
-        
+
         const guides = {
           'teachable-machine': {
             title: 'Teachable Machine Integration Guide',
@@ -390,5 +394,3 @@ const result = await response.json();
     },
   ];
 }
-
-export default AIModelController;

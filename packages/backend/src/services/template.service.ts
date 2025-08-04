@@ -1,12 +1,31 @@
+import { injectable } from 'tsyringe';
 import { prisma } from '../lib/prisma';
 import { NotFoundError } from '../utils/errors';
-import { Template } from '@prisma/client';
+import { Prisma } from '@prisma/client'; // Import Prisma for types
 
+// Manually define the Template interface to ensure compatibility
+interface Template {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  difficulty: string;
+  tags: string | null; // Stored as JSON string
+  codeTemplate: string;
+  aiModelType: string;
+  previewImages: string | null; // Stored as JSON string
+  usageCount: number;
+  rating: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+@injectable()
 export class TemplateService {
   /**
    * Get all templates with filtering and pagination
    */
-  static async getTemplates(
+  async getTemplates(
     filters?: {
       category?: string;
       difficulty?: string;
@@ -63,8 +82,15 @@ export class TemplateService {
       prisma.template.count({ where: whereClause }),
     ]);
 
+    // Parse JSON fields
+    const parsedTemplates = templates.map((template: Template) => ({
+      ...template,
+      tags: template.tags ? JSON.parse(template.tags) : [],
+      previewImages: template.previewImages ? JSON.parse(template.previewImages) : [],
+    }));
+
     return {
-      templates,
+      templates: parsedTemplates,
       total,
       page,
       totalPages: Math.ceil(total / limit),
@@ -74,7 +100,7 @@ export class TemplateService {
   /**
    * Get template by ID
    */
-  static async getTemplateById(templateId: string): Promise<Template> {
+  async getTemplateById(templateId: string): Promise<Template> {
     const template = await prisma.template.findUnique({
       where: { id: templateId },
     });
@@ -83,13 +109,20 @@ export class TemplateService {
       throw new NotFoundError('Template');
     }
 
-    return template;
+    // Parse JSON fields
+    const parsedTemplate = {
+      ...template,
+      tags: template.tags ? JSON.parse(template.tags) : [],
+      previewImages: template.previewImages ? JSON.parse(template.previewImages) : [],
+    };
+
+    return parsedTemplate;
   }
 
   /**
    * Get template categories
    */
-  static async getCategories(): Promise<Array<{
+  async getCategories(): Promise<Array<{
     category: string;
     count: number;
   }>> {
@@ -105,7 +138,7 @@ export class TemplateService {
       },
     });
 
-    return categories.map(cat => ({
+    return categories.map((cat: { category: string; _count: { category: number; }; }) => ({
       category: cat.category,
       count: cat._count.category,
     }));
@@ -114,21 +147,28 @@ export class TemplateService {
   /**
    * Get popular templates
    */
-  static async getPopularTemplates(limit: number = 6): Promise<Template[]> {
-    return prisma.template.findMany({
+  async getPopularTemplates(limit: number = 6): Promise<Template[]> {
+    const templates = await prisma.template.findMany({
       orderBy: [
         { usageCount: 'desc' },
         { rating: 'desc' },
       ],
       take: limit,
     });
+
+    // Parse JSON fields
+    return templates.map((template: Template) => ({
+      ...template,
+      tags: template.tags ? JSON.parse(template.tags) : [],
+      previewImages: template.previewImages ? JSON.parse(template.previewImages) : [],
+    }));
   }
 
   /**
    * Get featured templates
    */
-  static async getFeaturedTemplates(limit: number = 6): Promise<Template[]> {
-    return prisma.template.findMany({
+  async getFeaturedTemplates(limit: number = 6): Promise<Template[]> {
+    const templates = await prisma.template.findMany({
       where: {
         rating: {
           gte: 4.0,
@@ -140,12 +180,19 @@ export class TemplateService {
       ],
       take: limit,
     });
+
+    // Parse JSON fields
+    return templates.map((template: Template) => ({
+      ...template,
+      tags: template.tags ? JSON.parse(template.tags) : [],
+      previewImages: template.previewImages ? JSON.parse(template.previewImages) : [],
+    }));
   }
 
   /**
    * Increment template usage count
    */
-  static async incrementUsageCount(templateId: string): Promise<void> {
+  async incrementUsageCount(templateId: string): Promise<void> {
     await prisma.template.update({
       where: { id: templateId },
       data: {
@@ -159,7 +206,7 @@ export class TemplateService {
   /**
    * Search templates
    */
-  static async searchTemplates(
+  async searchTemplates(
     query: string,
     filters?: {
       category?: string;
@@ -184,5 +231,3 @@ export class TemplateService {
     );
   }
 }
-
-export default TemplateService;

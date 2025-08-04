@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
+import { injectable, inject } from 'tsyringe';
 import { ProjectService } from '../services/project.service';
 import { validateRequest, commonSchemas } from '../lib/validation';
-import { createProjectSchema, updateProjectSchema } from '../../../shared/src/schemas';
+import { createProjectSchema, updateProjectSchema, updatePageContentSchema } from '@shared/schemas';
 import { z } from 'zod';
 
 // Additional validation schemas
@@ -15,12 +16,15 @@ const duplicateProjectSchema = z.object({
   name: z.string().min(1, 'Project name is required').max(100, 'Project name too long').optional(),
 });
 
+@injectable()
 export class ProjectController {
+  constructor(@inject(ProjectService) private projectService: ProjectService) {}
+
   /**
    * Create new project
    * POST /projects
    */
-  static createProject = [
+  createProject = [
     validateRequest({ body: createProjectSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -35,7 +39,7 @@ export class ProjectController {
           });
         }
 
-        const project = await ProjectService.createProject(userId, req.body);
+        const project = await this.projectService.createProject(userId, req.body);
 
         res.status(201).json({
           success: true,
@@ -52,14 +56,14 @@ export class ProjectController {
    * Get project by ID
    * GET /projects/:id
    */
-  static getProject = [
+  getProject = [
     validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { id } = req.params;
         const userId = req.user?.userId;
 
-        const project = await ProjectService.getProjectById(id, userId);
+        const project = await this.projectService.getProjectById(id, userId);
 
         res.json({
           success: true,
@@ -75,8 +79,8 @@ export class ProjectController {
    * Get user's projects
    * GET /projects
    */
-  static getUserProjects = [
-    validateRequest({ 
+  getUserProjects = [
+    validateRequest({
       query: z.object({
         ...projectFiltersSchema.shape,
         ...commonSchemas.pagination.shape,
@@ -97,7 +101,7 @@ export class ProjectController {
 
         const { page, limit, sortBy, sortOrder, ...filters } = req.query as any;
         
-        const result = await ProjectService.getUserProjects(
+        const result = await this.projectService.getUserProjects(
           userId,
           filters,
           { page, limit }
@@ -126,8 +130,8 @@ export class ProjectController {
    * Update project
    * PUT /projects/:id
    */
-  static updateProject = [
-    validateRequest({ 
+  updateProject = [
+    validateRequest({
       params: commonSchemas.idParam,
       body: updateProjectSchema,
     }),
@@ -146,7 +150,7 @@ export class ProjectController {
           });
         }
 
-        const project = await ProjectService.updateProject(id, userId, req.body);
+        const project = await this.projectService.updateProject(id, userId, req.body);
 
         res.json({
           success: true,
@@ -163,7 +167,7 @@ export class ProjectController {
    * Delete project
    * DELETE /projects/:id
    */
-  static deleteProject = [
+  deleteProject = [
     validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -180,7 +184,7 @@ export class ProjectController {
           });
         }
 
-        await ProjectService.deleteProject(id, userId);
+        await this.projectService.deleteProject(id, userId);
 
         res.json({
           success: true,
@@ -196,8 +200,8 @@ export class ProjectController {
    * Get public projects
    * GET /projects/public
    */
-  static getPublicProjects = [
-    validateRequest({ 
+  getPublicProjects = [
+    validateRequest({
       query: z.object({
         ...projectFiltersSchema.shape,
         ...commonSchemas.pagination.shape,
@@ -207,7 +211,7 @@ export class ProjectController {
       try {
         const { page, limit, sortBy, sortOrder, ...filters } = req.query as any;
         
-        const result = await ProjectService.getPublicProjects(
+        const result = await this.projectService.getPublicProjects(
           filters,
           { page, limit }
         );
@@ -235,9 +239,9 @@ export class ProjectController {
    * Get project categories
    * GET /projects/categories
    */
-  static getCategories = async (req: Request, res: Response, next: NextFunction) => {
+  getCategories = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const categories = await ProjectService.getProjectCategories();
+      const categories = await this.projectService.getProjectCategories();
 
       res.json({
         success: true,
@@ -252,8 +256,8 @@ export class ProjectController {
    * Duplicate project
    * POST /projects/:id/duplicate
    */
-  static duplicateProject = [
-    validateRequest({ 
+  duplicateProject = [
+    validateRequest({
       params: commonSchemas.idParam,
       body: duplicateProjectSchema,
     }),
@@ -273,7 +277,7 @@ export class ProjectController {
         }
 
         const { name } = req.body;
-        const project = await ProjectService.duplicateProject(id, userId, name);
+        const project = await this.projectService.duplicateProject(id, userId, name);
 
         res.status(201).json({
           success: true,
@@ -290,7 +294,7 @@ export class ProjectController {
    * Archive project
    * POST /projects/:id/archive
    */
-  static archiveProject = [
+  archiveProject = [
     validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -307,7 +311,7 @@ export class ProjectController {
           });
         }
 
-        const project = await ProjectService.archiveProject(id, userId);
+        const project = await this.projectService.archiveProject(id, userId);
 
         res.json({
           success: true,
@@ -324,7 +328,7 @@ export class ProjectController {
    * Restore project
    * POST /projects/:id/restore
    */
-  static restoreProject = [
+  restoreProject = [
     validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -341,7 +345,7 @@ export class ProjectController {
           });
         }
 
-        const project = await ProjectService.restoreProject(id, userId);
+        const project = await this.projectService.restoreProject(id, userId);
 
         res.json({
           success: true,
@@ -358,7 +362,7 @@ export class ProjectController {
    * Get project statistics
    * GET /projects/:id/stats
    */
-  static getProjectStats = [
+  getProjectStats = [
     validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -375,7 +379,7 @@ export class ProjectController {
           });
         }
 
-        const stats = await ProjectService.getProjectStats(id, userId);
+        const stats = await this.projectService.getProjectStats(id, userId);
 
         res.json({
           success: true,
@@ -391,8 +395,8 @@ export class ProjectController {
    * Search projects
    * GET /projects/search
    */
-  static searchProjects = [
-    validateRequest({ 
+  searchProjects = [
+    validateRequest({
       query: z.object({
         q: z.string().min(1, 'Search query is required'),
         category: z.string().optional(),
@@ -405,9 +409,9 @@ export class ProjectController {
         const { q, page, limit, category, publicOnly } = req.query as any;
         const userId = req.user?.userId;
         
-        const result = await ProjectService.searchProjects(
+        const result = await this.projectService.searchProjects(
           q,
-          { 
+          {
             category, 
             userId: publicOnly ? undefined : userId,
             publicOnly,
@@ -434,6 +438,42 @@ export class ProjectController {
       }
     },
   ];
-}
 
-export default ProjectController;
+  /**
+   * Update project page content
+   * PUT /projects/:id/page-content
+   */
+  updatePageContent = [
+    validateRequest({
+      params: commonSchemas.idParam,
+      body: updatePageContentSchema,
+    }),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { id } = req.params;
+        const userId = req.user?.userId;
+        
+        if (!userId) {
+          return res.status(401).json({
+            success: false,
+            error: {
+              code: 'AUTH_001',
+              message: 'Authentication required',
+            },
+          });
+        }
+
+        const { pageContent } = req.body;
+        const project = await this.projectService.updateProject(id, userId, { pageContent });
+
+        res.json({
+          success: true,
+          data: { project },
+          message: 'Project page content updated successfully',
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  ];
+}

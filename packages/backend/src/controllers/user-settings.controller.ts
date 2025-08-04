@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { injectable, inject } from 'tsyringe';
 import { UserSettingsService, UserSettings } from '../services/user-settings.service';
 import { validateRequest } from '../lib/validation';
 import { z } from 'zod';
@@ -45,12 +46,15 @@ const importSettingsSchema = z.object({
   version: z.string().optional(),
 });
 
+@injectable()
 export class UserSettingsController {
+  constructor(@inject(UserSettingsService) private userSettingsService: UserSettingsService) {}
+
   /**
    * Get user settings
    * GET /users/settings
    */
-  static getSettings = async (req: Request, res: Response, next: NextFunction) => {
+  getSettings = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
       if (!userId) {
@@ -63,7 +67,7 @@ export class UserSettingsController {
         });
       }
 
-      const settings = await UserSettingsService.getUserSettings(userId);
+      const settings = await this.userSettingsService.getUserSettings(userId);
 
       res.json({
         success: true,
@@ -78,7 +82,7 @@ export class UserSettingsController {
    * Update user settings
    * PUT /users/settings
    */
-  static updateSettings = [
+  updateSettings = [
     validateRequest({ body: fullSettingsSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -93,7 +97,7 @@ export class UserSettingsController {
           });
         }
 
-        const settings = await UserSettingsService.updateUserSettings(userId, req.body);
+        const settings = await this.userSettingsService.updateUserSettings(userId, req.body);
 
         res.json({
           success: true,
@@ -110,7 +114,7 @@ export class UserSettingsController {
    * Reset settings to defaults
    * POST /users/settings/reset
    */
-  static resetSettings = async (req: Request, res: Response, next: NextFunction) => {
+  resetSettings = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
       if (!userId) {
@@ -123,7 +127,7 @@ export class UserSettingsController {
         });
       }
 
-      const settings = await UserSettingsService.resetSettings(userId);
+      const settings = await this.userSettingsService.resetSettings(userId);
 
       res.json({
         success: true,
@@ -139,7 +143,7 @@ export class UserSettingsController {
    * Update notification settings
    * PUT /users/settings/notifications
    */
-  static updateNotifications = [
+  updateNotifications = [
     validateRequest({ body: notificationSettingsSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -154,7 +158,7 @@ export class UserSettingsController {
           });
         }
 
-        const settings = await UserSettingsService.updateNotificationSettings(userId, req.body);
+        const settings = await this.userSettingsService.updateNotificationSettings(userId, req.body);
 
         res.json({
           success: true,
@@ -171,7 +175,7 @@ export class UserSettingsController {
    * Update privacy settings
    * PUT /users/settings/privacy
    */
-  static updatePrivacy = [
+  updatePrivacy = [
     validateRequest({ body: privacySettingsSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -186,7 +190,7 @@ export class UserSettingsController {
           });
         }
 
-        const settings = await UserSettingsService.updatePrivacySettings(userId, req.body);
+        const settings = await this.userSettingsService.updatePrivacySettings(userId, req.body);
 
         res.json({
           success: true,
@@ -203,7 +207,7 @@ export class UserSettingsController {
    * Update preferences
    * PUT /users/settings/preferences
    */
-  static updatePreferences = [
+  updatePreferences = [
     validateRequest({ body: preferencesSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -218,7 +222,7 @@ export class UserSettingsController {
           });
         }
 
-        const settings = await UserSettingsService.updatePreferences(userId, req.body);
+        const settings = await this.userSettingsService.updatePreferences(userId, req.body);
 
         res.json({
           success: true,
@@ -235,7 +239,7 @@ export class UserSettingsController {
    * Update developer settings
    * PUT /users/settings/developer
    */
-  static updateDeveloper = [
+  updateDeveloper = [
     validateRequest({ body: developerSettingsSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -250,7 +254,7 @@ export class UserSettingsController {
           });
         }
 
-        const settings = await UserSettingsService.updateDeveloperSettings(userId, req.body);
+        const settings = await this.userSettingsService.updateDeveloperSettings(userId, req.body);
 
         res.json({
           success: true,
@@ -267,7 +271,7 @@ export class UserSettingsController {
    * Export user settings
    * GET /users/settings/export
    */
-  static exportSettings = async (req: Request, res: Response, next: NextFunction) => {
+  exportSettings = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
       if (!userId) {
@@ -280,7 +284,7 @@ export class UserSettingsController {
         });
       }
 
-      const exportData = await UserSettingsService.exportSettings(userId);
+      const exportData = await this.userSettingsService.exportSettings(userId);
 
       // Set headers for file download
       res.setHeader('Content-Type', 'application/json');
@@ -299,7 +303,7 @@ export class UserSettingsController {
    * Import user settings
    * POST /users/settings/import
    */
-  static importSettings = [
+  importSettings = [
     validateRequest({ body: importSettingsSchema }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -314,7 +318,7 @@ export class UserSettingsController {
           });
         }
 
-        const settings = await UserSettingsService.importSettings(userId, req.body);
+        const settings = await this.userSettingsService.importSettings(userId, req.body);
 
         res.json({
           success: true,
@@ -331,9 +335,9 @@ export class UserSettingsController {
    * Get settings schema
    * GET /users/settings/schema
    */
-  static getSchema = async (req: Request, res: Response, next: NextFunction) => {
+  getSchema = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const schema = UserSettingsService.getSettingsSchema();
+      const schema = this.userSettingsService.getSettingsSchema();
 
       res.json({
         success: true,
@@ -344,5 +348,3 @@ export class UserSettingsController {
     }
   };
 }
-
-export default UserSettingsController;
