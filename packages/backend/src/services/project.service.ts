@@ -268,6 +268,7 @@ export class ProjectService {
       category?: string;
       search?: string;
       status?: string;
+      publicOnly?: boolean;
     },
     pagination?: {
       page: number;

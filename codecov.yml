@@ -1,0 +1,42 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+        base: auto
+    patch:
+      default:
+        target: 80%
+        threshold: 1%
+
+  ignore:
+    - "packages/*/dist/**"
+    - "packages/*/.next/**"
+    - "packages/*/coverage/**"
+    - "packages/**/node_modules/**"
+    - "packages/**/__tests__/**"
+    - "packages/**/*.test.ts"
+    - "packages/**/*.test.tsx"
+    - "packages/**/*.spec.ts"
+    - "packages/**/*.spec.tsx"
+    - "packages/*/jest.config.js"
+    - "packages/*/next.config.js"
+    - "packages/*/tailwind.config.js"
+    - "packages/*/postcss.config.js"
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false
+
+flags:
+  backend:
+    paths:
+      - packages/backend/src
+  frontend:
+    paths:
+      - packages/frontend/src
+  shared:
+    paths:
+      - packages/shared/src
