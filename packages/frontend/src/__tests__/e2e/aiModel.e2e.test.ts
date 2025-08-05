@@ -129,7 +129,7 @@ test.describe('AI Model Integration E2E Tests', () => {
               {
                 id: 'teachable-machine',
                 name: 'Teachable Machine',
-                description: 'Google\\'s Teachable Machine for image, audio, and text classification',
+                description: 'Google\'s Teachable Machine for image, audio, and text classification',
                 inputTypes: ['image', 'audio', 'text'],
               },
               {

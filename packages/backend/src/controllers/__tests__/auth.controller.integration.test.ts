@@ -10,7 +10,12 @@ const mockAuthService = {
   login: jest.fn(),
   verifyToken: jest.fn(),
   refreshToken: jest.fn(),
-} as jest.Mocked<AuthService>;
+  getUserProfile: jest.fn(),
+  updateProfile: jest.fn(),
+  changePassword: jest.fn(),
+  deleteAccount: jest.fn(),
+  validateUserPermissions: jest.fn(),
+} as any;
 
 // Override container resolution
 container.registerInstance(AuthService, mockAuthService);

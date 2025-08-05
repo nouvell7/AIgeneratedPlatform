@@ -63,5 +63,52 @@ npm run test            # Run all tests
 - **Monetization**: Google AdSense API
 
 ## Environment Variables
-Backend requires `.env` file with database URL, JWT secrets, and OAuth credentials.
-Frontend requires `.env.local` with API endpoints and public keys.
+
+### Backend (.env)
+```bash
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/ai_service_platform"
+# For development with SQLite: DATABASE_URL="file:./dev.db"
+
+# JWT
+JWT_SECRET="your-super-secret-jwt-key-here"
+JWT_REFRESH_SECRET="your-super-secret-refresh-key-here"
+
+# OAuth
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+GITHUB_CLIENT_ID="your-github-client-id"
+GITHUB_CLIENT_SECRET="your-github-client-secret"
+
+# External APIs
+TEACHABLE_MACHINE_API_KEY="your-teachable-machine-api-key"
+HUGGING_FACE_API_KEY="your-hugging-face-api-key"
+CLOUDFLARE_API_TOKEN="your-cloudflare-api-token"
+GOOGLE_ADSENSE_CLIENT_ID="your-adsense-client-id"
+GOOGLE_ADSENSE_CLIENT_SECRET="your-adsense-client-secret"
+GITHUB_TOKEN="your-github-personal-access-token"
+
+# Optional
+REDIS_URL="redis://localhost:6379"
+NODE_ENV="development"
+PORT=3001
+```
+
+### Frontend (.env.local)
+```bash
+# API Configuration
+NEXT_PUBLIC_API_URL="http://localhost:3001"
+NEXT_PUBLIC_FRONTEND_URL="http://localhost:3000"
+
+# OAuth Configuration
+NEXT_PUBLIC_GOOGLE_CLIENT_ID="your-google-client-id"
+NEXT_PUBLIC_GITHUB_CLIENT_ID="your-github-client-id"
+
+# External Services
+NEXT_PUBLIC_CLOUDFLARE_PAGES_URL="https://your-project.pages.dev"
+NEXT_PUBLIC_TEACHABLE_MACHINE_URL="https://teachablemachine.withgoogle.com"
+
+# Analytics (optional)
+NEXT_PUBLIC_GA_TRACKING_ID="your-google-analytics-id"
+NEXT_PUBLIC_NODE_ENV="development"
+```

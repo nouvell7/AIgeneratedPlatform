@@ -1,16 +1,15 @@
 import { Request, Response } from 'express';
-import { injectable, inject } from 'tsyringe';
+import { container } from 'tsyringe';
 import { RevenueService } from '../services/revenue.service';
-import { RevenueOptimizationService } from '../services/revenue-optimization.service';
 import { logger } from '../utils/logger';
 import { AppError } from '../utils/errors';
 
-@injectable()
 export class RevenueController {
-  constructor(
-    @inject(RevenueService) private revenueService: RevenueService,
-    @inject(RevenueOptimizationService) private revenueOptimizationService: RevenueOptimizationService
-  ) {}
+  private revenueService: RevenueService;
+
+  constructor(revenueService?: RevenueService) {
+    this.revenueService = revenueService || container.resolve(RevenueService);
+  }
 
   /**
    * Get revenue dashboard data
@@ -328,192 +327,7 @@ export class RevenueController {
     }
   }
 
-  /**
-   * Get revenue settings
-   */
-  async getRevenueSettings(req: Request, res: Response) {
-    try {
-      const { projectId } = req.params;
-      const userId = req.user?.userId;
 
-      if (!userId) {
-        throw new AppError('Authentication required', 401);
-      }
-
-      if (!projectId) {
-        throw new AppError('Project ID is required', 400);
-      }
-
-      const settings = await this.revenueOptimizationService.getRevenueSettings(projectId, userId);
-
-      res.json({
-        success: true,
-        data: settings,
-      });
-    } catch (error: any) {
-      logger.error('Failed to get revenue settings', { error: error.message });
-      res.status(error.statusCode || 500).json({
-        success: false,
-        error: {
-          message: error.message,
-          code: 'REVENUE_SETTINGS_FAILED',
-        },
-      });
-    }
-  }
-
-  /**
-   * Update revenue settings
-   */
-  async updateRevenueSettings(req: Request, res: Response) {
-    try {
-      const { projectId } = req.params;
-      const userId = req.user?.userId;
-      const settings = req.body;
-
-      if (!userId) {
-        throw new AppError('Authentication required', 401);
-      }
-
-      if (!projectId) {
-        throw new AppError('Project ID is required', 400);
-      }
-
-      const updatedSettings = await this.revenueOptimizationService.updateRevenueSettings(
-        projectId,
-        userId,
-        settings
-      );
-
-      res.json({
-        success: true,
-        data: updatedSettings,
-      });
-    } catch (error: any) {
-      logger.error('Failed to update revenue settings', { error: error.message });
-      res.status(error.statusCode || 500).json({
-        success: false,
-        error: {
-          message: error.message,
-          code: 'REVENUE_SETTINGS_UPDATE_FAILED',
-        },
-      });
-    }
-  }
-
-  /**
-   * Get optimization report
-   */
-  async getOptimizationReport(req: Request, res: Response) {
-    try {
-      const { projectId } = req.params;
-      const userId = req.user?.userId;
-
-      if (!userId) {
-        throw new AppError('Authentication required', 401);
-      }
-
-      if (!projectId) {
-        throw new AppError('Project ID is required', 400);
-      }
-
-      const report = await this.revenueOptimizationService.getOptimizationReport(projectId, userId);
-
-      res.json({
-        success: true,
-        data: report,
-      });
-    } catch (error: any) {
-      logger.error('Failed to get optimization report', { error: error.message });
-      res.status(error.statusCode || 500).json({
-        success: false,
-        error: {
-          message: error.message,
-          code: 'OPTIMIZATION_REPORT_FAILED',
-        },
-      });
-    }
-  }
-
-  /**
-   * Get optimization recommendations
-   */
-  async getOptimizationRecommendations(req: Request, res: Response) {
-    try {
-      const { projectId } = req.params;
-      const userId = req.user?.userId;
-
-      if (!userId) {
-        throw new AppError('Authentication required', 401);
-      }
-
-      if (!projectId) {
-        throw new AppError('Project ID is required', 400);
-      }
-
-      const recommendations = await this.revenueOptimizationService.generateOptimizationRecommendations(
-        projectId,
-        userId
-      );
-
-      res.json({
-        success: true,
-        data: recommendations,
-      });
-    } catch (error: any) {
-      logger.error('Failed to get optimization recommendations', { error: error.message });
-      res.status(error.statusCode || 500).json({
-        success: false,
-        error: {
-          message: error.message,
-          code: 'OPTIMIZATION_RECOMMENDATIONS_FAILED',
-        },
-      });
-    }
-  }
-
-  /**
-   * Apply optimization recommendation
-   */
-  async applyOptimizationRecommendation(req: Request, res: Response) {
-    try {
-      const { projectId } = req.params;
-      const { recommendationId } = req.body;
-      const userId = req.user?.userId;
-
-      if (!userId) {
-        throw new AppError('Authentication required', 401);
-      }
-
-      if (!projectId) {
-        throw new AppError('Project ID is required', 400);
-      }
-
-      if (!recommendationId) {
-        throw new AppError('Recommendation ID is required', 400);
-      }
-
-      const result = await this.revenueOptimizationService.applyOptimizationRecommendation(
-        projectId,
-        userId,
-        recommendationId
-      );
-
-      res.json({
-        success: true,
-        data: result,
-      });
-    } catch (error: any) {
-      logger.error('Failed to apply optimization recommendation', { error: error.message });
-      res.status(error.statusCode || 500).json({
-        success: false,
-        error: {
-          message: error.message,
-          code: 'OPTIMIZATION_APPLY_FAILED',
-        },
-      });
-    }
-  }
 
   /**
    * Convert data to CSV format

@@ -145,8 +145,9 @@ describe('Template Controller Integration Tests', () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data.categories).toEqual(mockCategories);
     });
-  });  de
-scribe('GET /api/templates/popular', () => {
+  });
+
+describe('GET /api/templates/popular', () => {
     it('인기 템플릿 조회 성공', async () => {
       // Given
       const mockPopularTemplates = [
@@ -230,8 +231,9 @@ scribe('GET /api/templates/popular', () => {
         { page: 1, limit: 10 }
       );
     });
-  });  d
-escribe('POST /api/projects/from-template/:id', () => {
+  });
+
+describe('POST /api/projects/from-template/:id', () => {
     it('템플릿으로부터 프로젝트 생성 성공', async () => {
       // Given
       const mockTemplate = {

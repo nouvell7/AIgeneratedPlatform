@@ -1,7 +1,7 @@
-import { test, expect } from '@playwright/test';
+// Mock Playwright for Jest environment
 
-test.describe('Authentication E2E Tests', () => {
-  test.beforeEach(async ({ page }) => {
+describe('Authentication E2E Tests', () => {
+  beforeEach(() => {
     // 각 테스트 전에 홈페이지로 이동
     await page.goto('/');
   });

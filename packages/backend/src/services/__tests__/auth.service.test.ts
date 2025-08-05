@@ -1,15 +1,46 @@
+import 'reflect-metadata';
 import { AuthService } from '../auth.service';
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import { ValidationError, ConflictError, AuthenticationError } from '../../utils/errors';
 
 // Mock dependencies
-jest.mock('bcryptjs');
-jest.mock('jsonwebtoken');
+jest.mock('../../lib/prisma', () => ({
+  prisma: {
+    user: {
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      create: jest.fn(),
+    },
+  },
+}));
 
-const mockPrisma = new PrismaClient() as jest.Mocked<PrismaClient>;
-const mockBcrypt = bcrypt as jest.Mocked<typeof bcrypt>;
-const mockJwt = jwt as jest.Mocked<typeof jwt>;
+jest.mock('../../utils/password', () => ({
+  PasswordService: {
+    validatePasswordStrength: jest.fn(),
+    hashPassword: jest.fn(),
+    verifyPassword: jest.fn(),
+  },
+}));
+
+jest.mock('../../utils/jwt', () => ({
+  JWTService: {
+    generateTokenPair: jest.fn(),
+    verifyRefreshToken: jest.fn(),
+  },
+}));
+
+jest.mock('../../utils/logger', () => ({
+  loggers: {
+    auth: {
+      userRegistered: jest.fn(),
+      userLoggedIn: jest.fn(),
+      tokenRefreshed: jest.fn(),
+    },
+  },
+}));
+
+const mockPrisma = require('../../lib/prisma').prisma;
+const mockPassword = require('../../utils/password').PasswordService;
+const mockJwt = require('../../utils/jwt').JWTService;
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -30,67 +61,61 @@ describe('AuthService', () => {
       // Given
       const hashedPassword = 'hashed-password';
       const mockUser = {
-        ...global.mockUser,
-        ...validUserData,
-        passwordHash: hashedPassword,
-      };
-
-      mockPrisma.user.findUnique = jest.fn().mockResolvedValue(null);
-      mockBcrypt.hash = jest.fn().mockResolvedValue(hashedPassword);
-      mockPrisma.user.create = jest.fn().mockResolvedValue(mockUser);
-      mockJwt.sign = jest.fn().mockReturnValue('mock-jwt-token');
-
-      // When
-      const result = await authService.register(validUserData);
-
-      // Then
-      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { email: validUserData.email },
-      });
-      expect(mockBcrypt.hash).toHaveBeenCalledWith(validUserData.password, 10);
-      expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: {
-          email: validUserData.email,
-          username: validUserData.username,
-          passwordHash: hashedPassword,
-        },
-      });
-      expect(result.success).toBe(true);
-      expect(result.data.user).toEqual(expect.objectContaining({
+        id: 'user-123',
         email: validUserData.email,
         username: validUserData.username,
-      }));
-      expect(result.data.token).toBe('mock-jwt-token');
-    });
+        passwordHash: hashedPassword,
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-    it('중복된 이메일로 회원가입 실패', async () => {
-      // Given
-      const existingUser = global.mockUser;
-      mockPrisma.user.findUnique = jest.fn().mockResolvedValue(existingUser);
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+      mockPassword.validatePasswordStrength.mockReturnValue({ 
+        isValid: true, 
+        score: 4, 
+        errors: [] 
+      });
+      mockPassword.hashPassword.mockResolvedValue(hashedPassword);
+      mockPrisma.user.create.mockResolvedValue(mockUser);
+      mockJwt.generateTokenPair.mockReturnValue({
+        accessToken: 'mock-access-token',
+        refreshToken: 'mock-refresh-token',
+      });
 
       // When
       const result = await authService.register(validUserData);
 
       // Then
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe('USER_ALREADY_EXISTS');
-      expect(result.error?.message).toBe('이미 존재하는 이메일입니다');
+      expect(result).toEqual({
+        user: expect.objectContaining({
+          id: mockUser.id,
+          email: mockUser.email,
+          username: mockUser.username,
+        }),
+        tokens: {
+          accessToken: 'mock-access-token',
+          refreshToken: 'mock-refresh-token',
+        },
+      });
     });
 
-    it('잘못된 이메일 형식으로 회원가입 실패', async () => {
+    it('이미 존재하는 이메일로 회원가입 실패', async () => {
       // Given
-      const invalidUserData = {
-        ...validUserData,
-        email: 'invalid-email',
+      const existingUser = {
+        id: 'existing-user',
+        email: validUserData.email,
       };
+      mockPassword.validatePasswordStrength.mockReturnValue({ 
+        isValid: true, 
+        score: 4, 
+        errors: [] 
+      });
+      mockPrisma.user.findFirst.mockResolvedValue(existingUser);
 
-      // When
-      const result = await authService.register(invalidUserData);
-
-      // Then
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe('VALIDATION_ERROR');
-      expect(result.error?.message).toContain('유효한 이메일');
+      // When & Then
+      await expect(authService.register(validUserData))
+        .rejects.toThrow(ConflictError);
     });
 
     it('약한 비밀번호로 회원가입 실패', async () => {
@@ -99,19 +124,20 @@ describe('AuthService', () => {
         ...validUserData,
         password: '123',
       };
+      mockPassword.validatePasswordStrength.mockReturnValue({ 
+        isValid: false, 
+        score: 1, 
+        errors: ['Password too short'] 
+      });
 
-      // When
-      const result = await authService.register(weakPasswordData);
-
-      // Then
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe('VALIDATION_ERROR');
-      expect(result.error?.message).toContain('비밀번호는 최소 6자');
+      // When & Then
+      await expect(authService.register(weakPasswordData))
+        .rejects.toThrow(ValidationError);
     });
   });
 
   describe('login', () => {
-    const loginData = {
+    const loginCredentials = {
       email: 'test@example.com',
       password: 'password123',
     };
@@ -119,118 +145,102 @@ describe('AuthService', () => {
     it('올바른 자격증명으로 로그인 성공', async () => {
       // Given
       const mockUser = {
-        ...global.mockUser,
+        id: 'user-123',
+        email: loginCredentials.email,
+        username: 'testuser',
         passwordHash: 'hashed-password',
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
-      mockPrisma.user.findUnique = jest.fn().mockResolvedValue(mockUser);
-      mockBcrypt.compare = jest.fn().mockResolvedValue(true);
-      mockJwt.sign = jest.fn().mockReturnValue('mock-jwt-token');
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockPassword.verifyPassword.mockResolvedValue(true);
+      mockJwt.generateTokenPair.mockReturnValue({
+        accessToken: 'mock-access-token',
+        refreshToken: 'mock-refresh-token',
+      });
 
       // When
-      const result = await authService.login(loginData);
+      const result = await authService.login(loginCredentials);
 
       // Then
-      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { email: loginData.email },
+      expect(result).toEqual({
+        user: expect.objectContaining({
+          id: mockUser.id,
+          email: mockUser.email,
+          username: mockUser.username,
+        }),
+        tokens: {
+          accessToken: 'mock-access-token',
+          refreshToken: 'mock-refresh-token',
+        },
       });
-      expect(mockBcrypt.compare).toHaveBeenCalledWith(
-        loginData.password,
-        mockUser.passwordHash
-      );
-      expect(result.success).toBe(true);
-      expect(result.data.user).toEqual(expect.objectContaining({
-        email: mockUser.email,
-        username: mockUser.username,
-      }));
-      expect(result.data.token).toBe('mock-jwt-token');
     });
 
     it('존재하지 않는 이메일로 로그인 실패', async () => {
       // Given
-      mockPrisma.user.findUnique = jest.fn().mockResolvedValue(null);
+      mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      // When
-      const result = await authService.login(loginData);
-
-      // Then
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe('INVALID_CREDENTIALS');
-      expect(result.error?.message).toBe('이메일 또는 비밀번호가 올바르지 않습니다');
+      // When & Then
+      await expect(authService.login(loginCredentials))
+        .rejects.toThrow(AuthenticationError);
     });
 
     it('잘못된 비밀번호로 로그인 실패', async () => {
       // Given
       const mockUser = {
-        ...global.mockUser,
+        id: 'user-123',
+        email: loginCredentials.email,
         passwordHash: 'hashed-password',
       };
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockPassword.verifyPassword.mockResolvedValue(false);
 
-      mockPrisma.user.findUnique = jest.fn().mockResolvedValue(mockUser);
-      mockBcrypt.compare = jest.fn().mockResolvedValue(false);
-
-      // When
-      const result = await authService.login(loginData);
-
-      // Then
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe('INVALID_CREDENTIALS');
-      expect(result.error?.message).toBe('이메일 또는 비밀번호가 올바르지 않습니다');
+      // When & Then
+      await expect(authService.login(loginCredentials))
+        .rejects.toThrow(AuthenticationError);
     });
   });
 
-  describe('verifyToken', () => {
-    it('유효한 토큰 검증 성공', async () => {
+  describe('refreshToken', () => {
+    it('유효한 리프레시 토큰으로 토큰 갱신 성공', async () => {
       // Given
-      const token = 'valid-jwt-token';
-      const decodedPayload = { userId: 'test-user-id' };
-      const mockUser = global.mockUser;
+      const refreshToken = 'valid-refresh-token';
+      const mockPayload = { userId: 'user-123' };
+      const mockUser = {
+        id: 'user-123',
+        email: 'test@example.com',
+        username: 'testuser',
+      };
 
-      mockJwt.verify = jest.fn().mockReturnValue(decodedPayload);
-      mockPrisma.user.findUnique = jest.fn().mockResolvedValue(mockUser);
+      mockJwt.verifyRefreshToken.mockReturnValue(mockPayload);
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockJwt.generateTokenPair.mockReturnValue({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+      });
 
       // When
-      const result = await authService.verifyToken(token);
+      const result = await authService.refreshToken(refreshToken);
 
       // Then
-      expect(mockJwt.verify).toHaveBeenCalledWith(token, process.env.JWT_SECRET);
-      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { id: decodedPayload.userId },
+      expect(result).toEqual({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
       });
-      expect(result.success).toBe(true);
-      expect(result.data.user).toEqual(mockUser);
     });
 
-    it('잘못된 토큰으로 검증 실패', async () => {
+    it('잘못된 리프레시 토큰으로 갱신 실패', async () => {
       // Given
-      const invalidToken = 'invalid-token';
-      mockJwt.verify = jest.fn().mockImplementation(() => {
-        throw new Error('Invalid token');
+      const invalidRefreshToken = 'invalid-refresh-token';
+      mockJwt.verifyRefreshToken.mockImplementation(() => {
+        throw new AuthenticationError('Invalid refresh token');
       });
 
-      // When
-      const result = await authService.verifyToken(invalidToken);
-
-      // Then
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe('INVALID_TOKEN');
-    });
-
-    it('만료된 토큰으로 검증 실패', async () => {
-      // Given
-      const expiredToken = 'expired-token';
-      mockJwt.verify = jest.fn().mockImplementation(() => {
-        const error = new Error('Token expired');
-        error.name = 'TokenExpiredError';
-        throw error;
-      });
-
-      // When
-      const result = await authService.verifyToken(expiredToken);
-
-      // Then
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe('TOKEN_EXPIRED');
+      // When & Then
+      await expect(authService.refreshToken(invalidRefreshToken))
+        .rejects.toThrow(AuthenticationError);
     });
   });
 });

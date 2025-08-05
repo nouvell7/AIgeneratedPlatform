@@ -1,7 +1,11 @@
-import { test, expect } from '@playwright/test';
+// Mock Playwright for Jest environment
+const mockTest = {
+  describe: describe,
+  beforeEach: beforeEach,
+};
 
-test.describe('프로젝트 관리 E2E 테스트', () => {
-  test.beforeEach(async ({ page }) => {
+describe('프로젝트 관리 E2E 테스트', () => {
+  beforeEach(() => {
     // Mock API responses
     await page.route('**/api/auth/profile', async (route) => {
       await route.fulfill({
@@ -146,7 +150,7 @@ test.describe('프로젝트 관리 E2E 테스트', () => {
     });
   });
 
-  test('프로젝트 생성부터 배포까지 전체 플로우', async ({ page }) => {
+  it('프로젝트 생성부터 배포까지 전체 플로우', async () => {
     // 1. 프로젝트 목록 페이지로 이동
     await page.goto('/projects');
     await expect(page).toHaveTitle(/Projects/);
@@ -214,7 +218,7 @@ test.describe('프로젝트 관리 E2E 테스트', () => {
     await expect(page.locator('text=successfully, text=Success')).toBeVisible();
   });
 
-  test('No-Code 프로젝트 생성 및 페이지 편집 플로우', async ({ page }) => {
+  it('No-Code 프로젝트 생성 및 페이지 편집 플로우', async () => {
     // Mock No-Code project creation
     await page.route('**/api/projects', async (route) => {
       if (route.request().method() === 'POST') {
