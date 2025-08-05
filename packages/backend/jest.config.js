@@ -23,7 +23,7 @@ module.exports = {
     'json-summary'
   ],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@shared/(.*)$': '<rootDir>/../shared/src/$1'
   },

@@ -877,3 +877,66 @@ Kiro AI 어시스턴트가 프로젝트에서 일관된 개발 패턴을 따를 
 - 🗄️ **데이터**: 데이터베이스 스키마 변경
 - 📦 **의존성**: 패키지 추가/업데이트
 - 🎉 **효과**: 달성된 결과와 이점
+
+## [Unreleased] - 2025-08-04
+
+### 🎯 Day 4-5 완료: AI 모델 연동 테스트 27개 구현 완료! 🚀
+
+#### ✅ 완성된 AI 모델 테스트들
+- **Backend AI 모델 서비스 테스트**: 16개 ✅
+  - connectModel: Teachable Machine, Hugging Face 모델 연결
+  - testModel: 3가지 모델 타입 테스트 (TM, HF, Custom)
+  - disconnectModel: 모델 연결 해제 및 권한 검증
+  - getModelConfig: 모델 설정 조회 및 JSON 파싱
+  - getSupportedModelTypes: 지원 모델 타입 스키마 검증
+- **Backend AI 모델 API 통합 테스트**: 7개 ✅
+  - POST /api/projects/:projectId/ai-model (모델 연결)
+  - GET /api/projects/:projectId/ai-model (설정 조회)
+  - DELETE /api/projects/:projectId/ai-model (연결 해제)
+  - POST /api/projects/:projectId/ai-model/test (모델 테스트)
+  - GET /api/ai-models/types (타입 조회)
+  - POST /api/ai-models/validate (설정 검증)
+- **Frontend AI 모델 훅 테스트**: 3개 ✅
+  - AI 모델 연결, 테스트 실행, 연결 해제
+- **AI 모델 E2E 테스트**: 1개 ✅
+  - 모델 연결부터 테스트까지 전체 플로우
+
+#### 🔧 새로 구현된 AI 모델 기능들
+- **3가지 AI 모델 타입 지원**:
+  - Teachable Machine (Google): 이미지, 오디오, 포즈 분류
+  - Hugging Face: 텍스트 분류, 이미지 분류 등
+  - Custom API: 사용자 정의 모델 엔드포인트
+- **모델 연결 및 테스트 시스템**:
+  - 모델 URL 유효성 검사
+  - 메타데이터 API 호출 및 검증
+  - 실시간 모델 테스트 기능
+- **Redux 상태 관리**:
+  - aiModelSlice로 모델 상태 관리
+  - 로딩, 에러, 테스트 결과 상태 처리
+- **권한 및 보안**:
+  - 프로젝트 소유권 검증
+  - API 키 보안 처리
+  - 에러 핸들링 및 로깅
+
+#### 📁 새로 생성된 파일들
+- `packages/backend/src/services/aiModel.service.ts`
+- `packages/backend/src/services/__tests__/aiModel.service.test.ts`
+- `packages/backend/src/controllers/__tests__/aiModel.controller.integration.test.ts`
+- `packages/frontend/src/hooks/useAIModel.ts`
+- `packages/frontend/src/hooks/__tests__/useAIModel.test.ts`
+- `packages/frontend/src/store/slices/aiModelSlice.ts`
+- `packages/frontend/src/services/api/aiModel.ts`
+- `packages/frontend/src/__tests__/e2e/aiModel.e2e.test.ts`
+
+#### 📊 현재 진행 상황
+- **전체 테스트**: 70/146 (47.9% 완료) 🎯
+- **단위 테스트**: 58/98 (59.2% 완료)  
+- **통합 테스트**: 8/32 (25.0% 완료)
+- **E2E 테스트**: 4/16 (25.0% 완료)
+
+#### 🎯 다음 목표: Day 6-7 배포 시스템 테스트 16개
+- Codespace 생성 서비스 테스트 (8개)
+- 배포 프로세스 테스트 (5개)
+- 배포 상태 모니터링 테스트 (3개)
+
+---

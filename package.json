@@ -80,7 +80,6 @@
     "babel-plugin-jest-hoist": "^29.6.3",
     "babel-preset-current-node-syntax": "^1.2.0",
     "babel-preset-jest": "^29.6.3",
-    "backend": "^1.0.0",
     "balanced-match": "^1.0.2",
     "basic-auth": "^2.0.1",
     "bcryptjs": "^2.4.3",
@@ -265,7 +264,6 @@
     "fraction.js": "^4.3.7",
     "framer-motion": "^10.18.0",
     "fresh": "^0.5.2",
-    "frontend": "^1.0.0",
     "fs.realpath": "^1.0.0",
     "fsevents": "^2.3.3",
     "function-bind": "^1.1.2",
@@ -734,3 +732,63 @@
   "author": "",
   "license": "ISC"
 }
+
+IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.
+
+<environment_details>
+# VSCode Visible Files
+package.json
+
+# VSCode Open Tabs
+packages/backend/Dockerfile
+packages/frontend/Dockerfile
+packages/shared/tsconfig.json
+packages/frontend/src/pages/auth/login.tsx
+packages/frontend/tsconfig.json
+packages/backend/tsconfig.json
+.eslintrc.js
+packages/frontend/src/pages/auth/register.tsx
+packages/frontend/src/services/api/auth.ts
+packages/frontend/src/services/api/projects.ts
+packages/frontend/src/services/api/templates.ts
+packages/frontend/src/store/slices/authSlice.ts
+packages/backend/src/services/auth.service.ts
+packages/backend/src/services/user.service.ts
+packages/backend/src/utils/logger.ts
+packages/backend/src/services/oauth.service.ts
+packages/frontend/src/pages/dashboard.tsx
+packages/frontend/next.config.js
+packages/backend/src/lib/replit.client.ts
+packages/backend/src/lib/github.client.ts
+.kiro/specs/ai-service-platform/tasks.md
+.git/COMMIT_EDITMSG
+packages/backend/src/services/aiPageGenerator.service.ts
+packages/backend/src/controllers/project.controller.ts
+packages/backend/src/routes/project.routes.ts
+packages/backend/src/services/__tests__/codespaces.service.test.ts
+packages/backend/src/services/__tests__/deployment.service.test.ts
+packages/backend/src/controllers/__tests__/codespaces.controller.integration.test.ts
+packages/backend/src/controllers/__tests__/deployment.controller.integration.test.ts
+packages/backend/prisma/schema.prisma
+packages/backend/src/services/deployment.service.ts
+packages/backend/jest.config.js
+packages/frontend/jest.config.js
+package.json
+.env
+packages/backend/src/lib/cloudflare.client.ts
+packages/shared/src/i18n/en.ts
+packages/shared/src/i18n/ko.ts
+packages/shared/src/i18n/index.ts
+packages/shared/src/schemas.ts
+packages/shared/src/index.ts
+.kiro/specs/ai-service-platform/design.md
+
+# Current Time
+8/4/2025, 7:42:55 PM (Asia/Manila, UTC+8:00)
+
+# Context Window Usage
+556,381 / 1,048.576K tokens used (53%)
+
+# Current Mode
+ACT MODE
+</environment_details>

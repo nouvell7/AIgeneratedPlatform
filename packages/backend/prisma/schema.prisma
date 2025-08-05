@@ -171,16 +171,23 @@ model SuccessStory {
 }
 
 model DeploymentLog {
-  id        String           @id @default(cuid())
-  projectId String
-  status    String
-  platform  String
-  logs      String           // Deployment logs
-  error     String?          // Error message if failed
-  
+  id              String   @id @default(cuid())
+  projectId       String
+  status          String
+  platform        String
+  configuration   String   // Stores DeploymentConfig as JSON string
+  url             String?
+  previewUrl      String?
+  logs            String   // Deployment logs (JSON string of LogEntry[])
+  error           String?  // Error message if failed
+  isRollback      Boolean  @default(false)
+  rollbackFromId  String?
+
   // Timestamps
-  createdAt DateTime         @default(now())
-  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  completedAt     DateTime?
+
   @@map("deployment_logs")
 }
 

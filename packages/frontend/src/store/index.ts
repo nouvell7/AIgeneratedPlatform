@@ -5,6 +5,7 @@ import authSlice from './slices/authSlice';
 import uiSlice from './slices/uiSlice';
 import projectSlice from './slices/projectSlice';
 import templateSlice from './slices/templateSlice';
+import aiModelSlice from './slices/aiModelSlice';
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     ui: uiSlice,
     projects: projectSlice,
     templates: templateSlice,
+    aiModel: aiModelSlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
