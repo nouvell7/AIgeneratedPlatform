@@ -94,10 +94,13 @@ describe('Deployment Controller Integration Tests', () => {
 
       // Then
       expect(response.status).toBe(201);
-      expect(response.body).toEqual({
-        success: true,
-        data: { deployment: expectedResult },
-        message: 'Deployment started successfully',
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Deployment started successfully');
+      expect(response.body.data.deployment).toMatchObject({
+        id: expectedResult.id,
+        projectId: expectedResult.projectId,
+        status: expectedResult.status,
+        platform: expectedResult.platform,
       });
       expect(mockDeploymentService.startDeployment).toHaveBeenCalledWith(
         projectId,

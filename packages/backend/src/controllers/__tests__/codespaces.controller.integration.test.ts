@@ -26,18 +26,67 @@ let codespacesController: CodespacesController;
 
 beforeAll(() => {
   // Register a mock instance of CodespacesService
+  container.clearInstances();
   container.registerSingleton(CodespacesService, mockCodespacesService);
   codespacesController = container.resolve(CodespacesController);
 
-  // Manually set up routes for the controller methods
-  app.post('/codespaces', (req, res) => codespacesController.createCodespace(req, res));
-  app.get('/codespaces/:codespaceId', (req, res) => codespacesController.getCodespace(req, res));
-  app.get('/codespaces', (req, res) => codespacesController.listCodespaces(req, res));
-  app.post('/codespaces/:codespaceId/start', (req, res) => codespacesController.startCodespace(req, res));
-  app.post('/codespaces/:codespaceId/stop', (req, res) => codespacesController.stopCodespace(req, res));
-  app.delete('/codespaces/:codespaceId', (req, res) => codespacesController.deleteCodespace(req, res));
-  app.post('/codespaces/template', (req, res) => codespacesController.createRepositoryWithTemplate(req, res));
-  app.get('/codespaces/machines/:owner/:repo', (req, res) => codespacesController.getAvailableMachines(req, res));
+  // Manually set up routes for the controller methods with proper error handling
+  app.post('/codespaces', async (req, res, next) => {
+    try {
+      await codespacesController.createCodespace(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get('/codespaces/:codespaceId', async (req, res, next) => {
+    try {
+      await codespacesController.getCodespace(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get('/codespaces', async (req, res, next) => {
+    try {
+      await codespacesController.listCodespaces(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.post('/codespaces/:codespaceId/start', async (req, res, next) => {
+    try {
+      await codespacesController.startCodespace(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.post('/codespaces/:codespaceId/stop', async (req, res, next) => {
+    try {
+      await codespacesController.stopCodespace(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.delete('/codespaces/:codespaceId', async (req, res, next) => {
+    try {
+      await codespacesController.deleteCodespace(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.post('/codespaces/template', async (req, res, next) => {
+    try {
+      await codespacesController.createRepositoryWithTemplate(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get('/codespaces/machines/:owner/:repo', async (req, res, next) => {
+    try {
+      await codespacesController.getAvailableMachines(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
 });
 
 beforeEach(() => {
