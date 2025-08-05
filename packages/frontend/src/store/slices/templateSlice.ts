@@ -7,6 +7,7 @@ export interface TemplateState {
   featuredTemplates: Template[];
   popularTemplates: Template[];
   categories: Array<{ category: string; count: number }>;
+  selectedTemplate: Template | null;
   isLoading: boolean;
   error: string | null;
   pagination: {
@@ -22,6 +23,7 @@ const initialState: TemplateState = {
   featuredTemplates: [],
   popularTemplates: [],
   categories: [],
+  selectedTemplate: null,
   isLoading: false,
   error: null,
   pagination: {
@@ -69,6 +71,9 @@ const templateSlice = createSlice({
   name: 'templates',
   initialState,
   reducers: {
+    setSelectedTemplate: (state, action) => {
+      state.selectedTemplate = action.payload;
+    },
     clearError: (state) => {
       state.error = null;
     },
@@ -110,5 +115,5 @@ const templateSlice = createSlice({
   },
 });
 
-export const { clearError } = templateSlice.actions;
+export const { setSelectedTemplate, clearError } = templateSlice.actions;
 export default templateSlice.reducer;

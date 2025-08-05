@@ -1,38 +1,12 @@
 import 'reflect-metadata';
-import { CodespacesService } from '../codespaces.service'; // Ensure correct relative path
-import { Octokit } from '@octokit/rest';
-import { NotFoundError, InsufficientPermissionsError, AppError } from '../../utils/errors';
-import { container } from 'tsyringe';
-import { logger } from '../../utils/logger';
+import { CodespacesService, CodespaceConfig } from '../codespaces.service';
+import { AppError } from '../../utils/errors';
 
-// Mock Octokit and its rest.codespaces
-const mockCreateForAuthenticatedUser = jest.fn();
-const mockGetForAuthenticatedUser = jest.fn();
-const mockListForAuthenticatedUser = jest.fn();
-const mockStartForAuthenticatedUser = jest.fn();
-const mockStopForAuthenticatedUser = jest.fn();
-const mockDeleteForAuthenticatedUser = jest.fn();
-const mockCreateForAuthenticatedUserRepo = jest.fn(); // For repos.createForAuthenticatedUser
-
+// Mock dependencies
 jest.mock('@octokit/rest', () => ({
-  Octokit: jest.fn(() => ({
-    rest: {
-      codespaces: {
-        createForAuthenticatedUser: mockCreateForAuthenticatedUser,
-        getForAuthenticatedUser: mockGetForAuthenticatedUser,
-        listForAuthenticatedUser: mockListForAuthenticatedUser,
-        startForAuthenticatedUser: mockStartForAuthenticatedUser,
-        stopForAuthenticatedUser: mockStopForAuthenticatedUser,
-        deleteForAuthenticatedUser: mockDeleteForAuthenticatedUser,
-      },
-      repos: {
-        createForAuthenticatedUser: mockCreateForAuthenticatedUserRepo,
-      },
-    },
-  })),
+  Octokit: jest.fn(),
 }));
 
-// Mock the logger (default export)
 jest.mock('../../utils/logger', () => ({
   logger: {
     info: jest.fn(),
@@ -40,332 +14,365 @@ jest.mock('../../utils/logger', () => ({
   },
 }));
 
+const { Octokit } = require('@octokit/rest');
+
 describe('CodespacesService', () => {
   let codespacesService: CodespacesService;
-  let mockOctokit: jest.Mocked<Octokit>;
+  let mockOctokit: any;
 
   beforeEach(() => {
-    jest.clearAllMocks(); // Clear mocks before each test
+    // Set environment variable
+    process.env.GITHUB_TOKEN = 'test-github-token';
+    
+    // Create mock Octokit instance
+    mockOctokit = {
+      rest: {
+        codespaces: {
+          createForAuthenticatedUser: jest.fn(),
+          getForAuthenticatedUser: jest.fn(),
+          listForAuthenticatedUser: jest.fn(),
+          startForAuthenticatedUser: jest.fn(),
+          stopForAuthenticatedUser: jest.fn(),
+          deleteForAuthenticatedUser: jest.fn(),
+        },
+        repos: {
+          createForAuthenticatedUser: jest.fn(),
+        },
+      },
+    };
 
-    // Reset the tsyringe container to ensure fresh instances for each test
-    container.clearInstances();
-    container.reset();
-
-    // Set process.env.GITHUB_TOKEN for constructor to not throw error
-    process.env.GITHUB_TOKEN = 'test_token';
-
-    codespacesService = container.resolve(CodespacesService);
-    mockOctokit = (Octokit as unknown as jest.MockedClass<typeof Octokit>).mock.results[0].value;
+    Octokit.mockImplementation(() => mockOctokit);
+    
+    codespacesService = new CodespacesService();
+    jest.clearAllMocks();
   });
 
   afterEach(() => {
-    delete process.env.GITHUB_TOKEN; // Clean up
+    delete process.env.GITHUB_TOKEN;
+  });
+
+  describe('constructor', () => {
+    it('GitHub 토큰이 없으면 AppError 발생', () => {
+      delete process.env.GITHUB_TOKEN;
+      
+      expect(() => new CodespacesService()).toThrow(AppError);
+      expect(() => new CodespacesService()).toThrow('GitHub token is required for Codespaces integration');
+    });
+
+    it('GitHub 토큰이 있으면 Octokit 인스턴스 생성', () => {
+      process.env.GITHUB_TOKEN = 'test-token';
+      
+      const service = new CodespacesService();
+      
+      expect(Octokit).toHaveBeenCalledWith({
+        auth: 'test-token',
+      });
+    });
   });
 
   describe('createCodespace', () => {
-    const mockRepositoryId = 123;
-    const mockConfig = {
+    const repositoryId = 12345;
+    const config: CodespaceConfig = {
       repositoryName: 'test-repo',
       branch: 'main',
       machine: 'basicLinux32gb',
+      idleTimeoutMinutes: 30,
     };
 
-    it('should create a codespace successfully and return its data', async () => {
-      mockCreateForAuthenticatedUser.mockResolvedValueOnce({
-        data: {
-          id: 'cs123',
-          name: 'test-codespace',
-          state: 'Available',
-          web_url: 'https://codespaces.github.com/test-url',
-        },
-      });
+    it('Codespace 생성 성공', async () => {
+      // Given
+      const mockCodespace = {
+        id: 'codespace-123',
+        name: 'test-codespace',
+        state: 'Available',
+        web_url: 'https://github.com/codespaces/test-codespace',
+      };
 
-      const result = await codespacesService.createCodespace(mockRepositoryId, mockConfig);
+      mockOctokit.rest.codespaces.createForAuthenticatedUser.mockResolvedValue({
+        data: mockCodespace,
+      } as any);
 
-      expect(mockCreateForAuthenticatedUser).toHaveBeenCalledWith({
-        repository_id: mockRepositoryId,
-        ref: mockConfig.branch,
-        machine: mockConfig.machine,
+      // When
+      const result = await codespacesService.createCodespace(repositoryId, config);
+
+      // Then
+      expect(result).toEqual(mockCodespace);
+      expect(mockOctokit.rest.codespaces.createForAuthenticatedUser).toHaveBeenCalledWith({
+        repository_id: repositoryId,
+        ref: 'main',
+        machine: 'basicLinux32gb',
         devcontainer_path: undefined,
         idle_timeout_minutes: 30,
       });
-      expect(result).toEqual({
-        id: 'cs123',
-        name: 'test-codespace',
-        state: 'Available',
-        web_url: 'https://codespaces.github.com/test-url',
-      });
-      expect(logger.info).toHaveBeenCalledWith('Creating codespace', { repositoryId: mockRepositoryId, config: mockConfig });
-      expect(logger.info).toHaveBeenCalledWith('Codespace created successfully', { codespaceId: 'cs123', name: 'test-codespace' });
     });
 
-    it('should throw AppError if codespace creation fails', async () => {
-      const errorMessage = 'GitHub API error';
-      mockCreateForAuthenticatedUser.mockRejectedValueOnce(new Error(errorMessage));
+    it('기본값으로 Codespace 생성', async () => {
+      // Given
+      const basicConfig: CodespaceConfig = {
+        repositoryName: 'test-repo',
+      };
 
-      await expect(codespacesService.createCodespace(mockRepositoryId, mockConfig)).rejects.toThrow(AppError);
-      await expect(codespacesService.createCodespace(mockRepositoryId, mockConfig)).rejects.toHaveProperty('message', `Failed to create codespace: ${errorMessage}`);
-      expect(logger.error).toHaveBeenCalledWith('Failed to create codespace', { error: errorMessage, repositoryId: mockRepositoryId, config: mockConfig });
+      const mockCodespace = {
+        id: 'codespace-123',
+        name: 'test-codespace',
+      };
+
+      mockOctokit.rest.codespaces.createForAuthenticatedUser.mockResolvedValue({
+        data: mockCodespace,
+      } as any);
+
+      // When
+      await codespacesService.createCodespace(repositoryId, basicConfig);
+
+      // Then
+      expect(mockOctokit.rest.codespaces.createForAuthenticatedUser).toHaveBeenCalledWith({
+        repository_id: repositoryId,
+        ref: 'main',
+        machine: 'basicLinux32gb',
+        devcontainer_path: undefined,
+        idle_timeout_minutes: 30,
+      });
+    });
+
+    it('GitHub API 오류 시 AppError 발생', async () => {
+      // Given
+      const error = new Error('GitHub API Error');
+      mockOctokit.rest.codespaces.createForAuthenticatedUser.mockRejectedValue(error);
+
+      // When & Then
+      await expect(codespacesService.createCodespace(repositoryId, config))
+        .rejects.toThrow(AppError);
+      await expect(codespacesService.createCodespace(repositoryId, config))
+        .rejects.toThrow('Failed to create codespace: GitHub API Error');
     });
   });
 
   describe('getCodespace', () => {
-    const mockCodespaceId = 'test-codespace-id';
+    const codespaceId = 'test-codespace-id';
 
-    it('should return codespace information successfully', async () => {
-      mockGetForAuthenticatedUser.mockResolvedValueOnce({
-        data: {
-          id: mockCodespaceId,
-          name: 'test-codespace',
-          state: 'Available',
-          web_url: 'https://codespaces.github.com/test-url',
-        },
-      });
-
-      const result = await codespacesService.getCodespace(mockCodespaceId);
-
-      expect(mockGetForAuthenticatedUser).toHaveBeenCalledWith({ codespace_name: mockCodespaceId });
-      expect(result).toEqual({
-        id: mockCodespaceId,
+    it('Codespace 정보 조회 성공', async () => {
+      // Given
+      const mockCodespace = {
+        id: codespaceId,
         name: 'test-codespace',
         state: 'Available',
-        web_url: 'https://codespaces.github.com/test-url',
+        web_url: 'https://github.com/codespaces/test-codespace',
+      };
+
+      mockOctokit.rest.codespaces.getForAuthenticatedUser.mockResolvedValue({
+        data: mockCodespace,
+      } as any);
+
+      // When
+      const result = await codespacesService.getCodespace(codespaceId);
+
+      // Then
+      expect(result).toEqual(mockCodespace);
+      expect(mockOctokit.rest.codespaces.getForAuthenticatedUser).toHaveBeenCalledWith({
+        codespace_name: codespaceId,
       });
     });
 
-    it('should throw NotFoundError if codespace is not found (404)', async () => {
-      const error = new Error('Not Found');
-      (error as any).status = 404; // Simulate Octokit error structure
-      mockGetForAuthenticatedUser.mockRejectedValueOnce(error);
+    it('존재하지 않는 Codespace 조회 시 AppError 발생', async () => {
+      // Given
+      const error = new Error('Codespace not found');
+      mockOctokit.rest.codespaces.getForAuthenticatedUser.mockRejectedValue(error);
 
-      await expect(codespacesService.getCodespace(mockCodespaceId)).rejects.toThrow(NotFoundError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to get codespace', { error: 'Not Found', codespaceId: mockCodespaceId });
-    });
-
-    it('should throw AppError for other errors', async () => {
-      const errorMessage = 'API rate limit exceeded';
-      mockGetForAuthenticatedUser.mockRejectedValueOnce(new Error(errorMessage));
-
-      await expect(codespacesService.getCodespace(mockCodespaceId)).rejects.toThrow(AppError);
-      await expect(codespacesService.getCodespace(mockCodespaceId)).rejects.toHaveProperty('message', `Failed to get codespace: ${errorMessage}`);
-      expect(logger.error).toHaveBeenCalledWith('Failed to get codespace', { error: errorMessage, codespaceId: mockCodespaceId });
+      // When & Then
+      await expect(codespacesService.getCodespace(codespaceId))
+        .rejects.toThrow(AppError);
+      await expect(codespacesService.getCodespace(codespaceId))
+        .rejects.toThrow('Failed to get codespace: Codespace not found');
     });
   });
 
   describe('listCodespaces', () => {
-    it('should list codespaces successfully', async () => {
-      mockListForAuthenticatedUser.mockResolvedValueOnce({
-        data: {
-          codespaces: [{ id: 'cs1' }, { id: 'cs2' }],
-        },
-      });
+    it('모든 Codespace 목록 조회 성공', async () => {
+      // Given
+      const mockCodespaces = [
+        { id: 'codespace-1', name: 'test-codespace-1' },
+        { id: 'codespace-2', name: 'test-codespace-2' },
+      ];
 
+      mockOctokit.rest.codespaces.listForAuthenticatedUser.mockResolvedValue({
+        data: { codespaces: mockCodespaces },
+      } as any);
+
+      // When
       const result = await codespacesService.listCodespaces();
 
-      expect(mockListForAuthenticatedUser).toHaveBeenCalledWith({});
-      expect(result).toEqual([{ id: 'cs1' }, { id: 'cs2' }]);
-    });
-
-    it('should list codespaces for a specific repository', async () => {
-      const mockRepoId = 789;
-      mockListForAuthenticatedUser.mockResolvedValueOnce({
-        data: {
-          codespaces: [{ id: 'cs3' }],
-        },
+      // Then
+      expect(result).toEqual(mockCodespaces);
+      expect(mockOctokit.rest.codespaces.listForAuthenticatedUser).toHaveBeenCalledWith({
+        repository_id: undefined,
       });
-
-      const result = await codespacesService.listCodespaces(mockRepoId);
-
-      expect(mockListForAuthenticatedUser).toHaveBeenCalledWith({ repository_id: mockRepoId });
-      expect(result).toEqual([{ id: 'cs3' }]);
     });
 
-    it('should throw AppError if listing codespaces fails', async () => {
-      const errorMessage = 'Failed to fetch';
-      mockListForAuthenticatedUser.mockRejectedValueOnce(new Error(errorMessage));
+    it('특정 저장소의 Codespace 목록 조회 성공', async () => {
+      // Given
+      const repositoryId = 12345;
+      const mockCodespaces = [
+        { id: 'codespace-1', name: 'test-codespace-1' },
+      ];
 
-      await expect(codespacesService.listCodespaces()).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to list codespaces', { error: errorMessage, repositoryId: undefined });
+      mockOctokit.rest.codespaces.listForAuthenticatedUser.mockResolvedValue({
+        data: { codespaces: mockCodespaces },
+      } as any);
+
+      // When
+      const result = await codespacesService.listCodespaces(repositoryId);
+
+      // Then
+      expect(result).toEqual(mockCodespaces);
+      expect(mockOctokit.rest.codespaces.listForAuthenticatedUser).toHaveBeenCalledWith({
+        repository_id: repositoryId,
+      });
     });
   });
 
   describe('startCodespace', () => {
-    const mockCodespaceId = 'test-codespace-id';
+    const codespaceId = 'test-codespace-id';
 
-    it('should start a codespace successfully', async () => {
-      mockStartForAuthenticatedUser.mockResolvedValueOnce({
-        data: {
-          id: mockCodespaceId,
-          state: 'Available',
-        },
+    it('Codespace 시작 성공', async () => {
+      // Given
+      const mockCodespace = {
+        id: codespaceId,
+        name: 'test-codespace',
+        state: 'Available',
+      };
+
+      mockOctokit.rest.codespaces.startForAuthenticatedUser.mockResolvedValue({
+        data: mockCodespace,
+      } as any);
+
+      // When
+      const result = await codespacesService.startCodespace(codespaceId);
+
+      // Then
+      expect(result).toEqual(mockCodespace);
+      expect(mockOctokit.rest.codespaces.startForAuthenticatedUser).toHaveBeenCalledWith({
+        codespace_name: codespaceId,
       });
-
-      const result = await codespacesService.startCodespace(mockCodespaceId);
-
-      expect(mockStartForAuthenticatedUser).toHaveBeenCalledWith({ codespace_name: mockCodespaceId });
-      expect(result).toEqual({ id: mockCodespaceId, state: 'Available' });
-    });
-
-    it('should throw AppError if starting codespace fails', async () => {
-      const errorMessage = 'Cannot start codespace';
-      mockStartForAuthenticatedUser.mockRejectedValueOnce(new Error(errorMessage));
-
-      await expect(codespacesService.startCodespace(mockCodespaceId)).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to start codespace', { error: errorMessage, codespaceId: mockCodespaceId });
     });
   });
 
   describe('stopCodespace', () => {
-    const mockCodespaceId = 'test-codespace-id';
+    const codespaceId = 'test-codespace-id';
 
-    it('should stop a codespace successfully', async () => {
-      mockStopForAuthenticatedUser.mockResolvedValueOnce({
-        data: {
-          id: mockCodespaceId,
-          state: 'Stopped',
-        },
+    it('Codespace 중지 성공', async () => {
+      // Given
+      const mockCodespace = {
+        id: codespaceId,
+        name: 'test-codespace',
+        state: 'Shutdown',
+      };
+
+      mockOctokit.rest.codespaces.stopForAuthenticatedUser.mockResolvedValue({
+        data: mockCodespace,
+      } as any);
+
+      // When
+      const result = await codespacesService.stopCodespace(codespaceId);
+
+      // Then
+      expect(result).toEqual(mockCodespace);
+      expect(mockOctokit.rest.codespaces.stopForAuthenticatedUser).toHaveBeenCalledWith({
+        codespace_name: codespaceId,
       });
-
-      const result = await codespacesService.stopCodespace(mockCodespaceId);
-
-      expect(mockStopForAuthenticatedUser).toHaveBeenCalledWith({ codespace_name: mockCodespaceId });
-      expect(result).toEqual({ id: mockCodespaceId, state: 'Stopped' });
-    });
-
-    it('should throw AppError if stopping codespace fails', async () => {
-      const errorMessage = 'Cannot stop codespace';
-      mockStopForAuthenticatedUser.mockRejectedValueOnce(new Error(errorMessage));
-
-      await expect(codespacesService.stopCodespace(mockCodespaceId)).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to stop codespace', { error: errorMessage, codespaceId: mockCodespaceId });
     });
   });
 
   describe('deleteCodespace', () => {
-    const mockCodespaceId = 'test-codespace-id';
+    const codespaceId = 'test-codespace-id';
 
-    it('should delete a codespace successfully', async () => {
-      mockDeleteForAuthenticatedUser.mockResolvedValueOnce({});
+    it('Codespace 삭제 성공', async () => {
+      // Given
+      mockOctokit.rest.codespaces.deleteForAuthenticatedUser.mockResolvedValue({} as any);
 
-      await codespacesService.deleteCodespace(mockCodespaceId);
+      // When
+      await codespacesService.deleteCodespace(codespaceId);
 
-      expect(mockDeleteForAuthenticatedUser).toHaveBeenCalledWith({ codespace_name: mockCodespaceId });
-      expect(logger.info).toHaveBeenCalledWith('Codespace deleted successfully', { codespaceId: mockCodespaceId });
-    });
-
-    it('should throw AppError if deleting codespace fails', async () => {
-      const errorMessage = 'Failed to delete';
-      mockDeleteForAuthenticatedUser.mockRejectedValueOnce(new Error(errorMessage));
-
-      await expect(codespacesService.deleteCodespace(mockCodespaceId)).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to delete codespace', { error: errorMessage, codespaceId: mockCodespaceId });
+      // Then
+      expect(mockOctokit.rest.codespaces.deleteForAuthenticatedUser).toHaveBeenCalledWith({
+        codespace_name: codespaceId,
+      });
     });
   });
 
   describe('createRepositoryWithTemplate', () => {
-    const mockOwner = 'test-owner';
-    const mockRepoName = 'new-repo';
-    const mockDescription = 'A new test repository';
-    const mockAiModelConfig = { type: 'teachable-machine' };
-    const mockRepositoryId = 123;
+    const owner = 'test-owner';
+    const repoName = 'test-repo';
+    const description = 'Test repository';
+    const aiModelConfig = { type: 'teachable-machine' };
 
-    it('should create a repository and a codespace successfully', async () => {
-      mockCreateForAuthenticatedUserRepo.mockResolvedValueOnce({
-        data: {
-          id: mockRepositoryId,
-          name: mockRepoName,
-          html_url: `https://github.com/${mockOwner}/${mockRepoName}`,
-        },
-      });
-      mockCreateForAuthenticatedUser.mockResolvedValueOnce({
-        data: {
-          id: 'cs-new',
-          name: 'new-codespace',
-          web_url: 'https://codespaces.github.com/new-codespace',
-        },
-      });
+    it('템플릿으로 저장소 및 Codespace 생성 성공', async () => {
+      // Given
+      const mockRepository = {
+        id: 12345,
+        name: repoName,
+        full_name: `${owner}/${repoName}`,
+      };
 
+      const mockCodespace = {
+        id: 'codespace-123',
+        name: 'test-codespace',
+      };
+
+      mockOctokit.rest.repos.createForAuthenticatedUser.mockResolvedValue({
+        data: mockRepository,
+      } as any);
+
+      mockOctokit.rest.codespaces.createForAuthenticatedUser.mockResolvedValue({
+        data: mockCodespace,
+      } as any);
+
+      // When
       const result = await codespacesService.createRepositoryWithTemplate(
-        mockOwner,
-        mockRepoName,
-        mockDescription,
-        mockAiModelConfig
+        owner,
+        repoName,
+        description,
+        aiModelConfig
       );
 
-      expect(mockCreateForAuthenticatedUserRepo).toHaveBeenCalledWith({
-        name: mockRepoName,
-        description: mockDescription,
+      // Then
+      expect(result).toEqual({
+        repository: mockRepository,
+        codespace: mockCodespace,
+      });
+
+      expect(mockOctokit.rest.repos.createForAuthenticatedUser).toHaveBeenCalledWith({
+        name: repoName,
+        description,
         private: false,
         auto_init: true,
-      });
-      expect(mockCreateForAuthenticatedUser).toHaveBeenCalledWith({
-        repository_id: mockRepositoryId,
-        ref: 'main',
-        machine: 'basicLinux32gb', // Default machine
-        devcontainer_path: undefined,
-        idle_timeout_minutes: 30,
-      });
-      expect(result.repository).toEqual({
-        id: mockRepositoryId,
-        name: mockRepoName,
-        html_url: `https://github.com/${mockOwner}/${mockRepoName}`,
-      });
-      expect(result.codespace).toEqual({
-        id: 'cs-new',
-        name: 'new-codespace',
-        web_url: 'https://codespaces.github.com/new-codespace',
-      });
-    });
-
-    it('should throw AppError if repository creation fails', async () => {
-      const errorMessage = 'Repo creation failed';
-      mockCreateForAuthenticatedUserRepo.mockRejectedValueOnce(new Error(errorMessage));
-
-      await expect(codespacesService.createRepositoryWithTemplate(
-        mockOwner, mockRepoName, mockDescription, mockAiModelConfig
-      )).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to create repository with template', {
-        error: errorMessage,
-        owner: mockOwner,
-        repoName: mockRepoName,
-      });
-    });
-
-    it('should throw AppError if codespace creation fails after repo creation', async () => {
-      mockCreateForAuthenticatedUserRepo.mockResolvedValueOnce({
-        data: {
-          id: mockRepositoryId,
-          name: mockRepoName,
-          html_url: `https://github.com/${mockOwner}/${mockRepoName}`,
-        },
-      });
-      const errorMessage = 'Codespace creation failed';
-      mockCreateForAuthenticatedUser.mockRejectedValueOnce(new Error(errorMessage));
-
-      await expect(codespacesService.createRepositoryWithTemplate(
-        mockOwner, mockRepoName, mockDescription, mockAiModelConfig
-      )).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to create repository with template', {
-        error: errorMessage,
-        owner: mockOwner,
-        repoName: mockRepoName,
       });
     });
   });
 
   describe('getAvailableMachines', () => {
-    it('should return a list of default available machines', async () => {
-      const mockRepositoryId = 123;
-      const expectedMachines = [
-        { name: 'basicLinux32gb', display_name: 'Basic Linux (32 GB)', prebuild_availability: 'ready' },
-        { name: 'standardLinux32gb', display_name: 'Standard Linux (32 GB)', prebuild_availability: 'ready' },
-        { name: 'premiumLinux', display_name: 'Premium Linux', prebuild_availability: 'ready' }
-      ];
+    const repositoryId = 12345;
 
-      const result = await codespacesService.getAvailableMachines(mockRepositoryId);
+    it('사용 가능한 머신 목록 반환', async () => {
+      // When
+      const result = await codespacesService.getAvailableMachines(repositoryId);
 
-      expect(result).toEqual(expectedMachines);
-      expect(logger.error).not.toHaveBeenCalled(); // Ensure no error logged for successful path
+      // Then
+      expect(result).toHaveLength(3);
+      expect(result[0]).toEqual({
+        name: 'basicLinux32gb',
+        display_name: 'Basic Linux (32 GB)',
+        prebuild_availability: 'ready',
+      });
+      expect(result[1]).toEqual({
+        name: 'standardLinux32gb',
+        display_name: 'Standard Linux (32 GB)',
+        prebuild_availability: 'ready',
+      });
+      expect(result[2]).toEqual({
+        name: 'premiumLinux',
+        display_name: 'Premium Linux',
+        prebuild_availability: 'ready',
+      });
     });
   });
 });

@@ -366,7 +366,7 @@ export class DeploymentService {
         take: limit,
       });
 
-      return deployments.map(deployment => ({
+      return deployments.map((deployment: any) => ({
         id: deployment.id,
         projectId: deployment.projectId,
         status: deployment.status as any,

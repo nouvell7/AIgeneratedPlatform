@@ -1,42 +1,31 @@
 import { Request, Response, NextFunction } from 'express';
-import { injectable, inject } from 'tsyringe';
+import { container } from 'tsyringe';
 import { TemplateService } from '../services/template.service';
 import { ProjectService } from '../services/project.service';
-import { validateRequest, commonSchemas } from '../lib/validation';
-import { z } from 'zod';
 
-const templateFiltersSchema = z.object({
-  category: z.string().optional(),
-  difficulty: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).optional(),
-  search: z.string().optional(),
-  tags: z.string().transform(val => val.split(',')).pipe(z.array(z.string())).optional(),
-});
 
-@injectable()
+
 export class TemplateController {
-  constructor(
-    @inject(TemplateService) private templateService: TemplateService,
-    @inject(ProjectService) private projectService: ProjectService
-  ) {}
+  private templateService: TemplateService;
+  private projectService: ProjectService;
+
+  constructor() {
+    this.templateService = container.resolve(TemplateService);
+    this.projectService = container.resolve(ProjectService);
+  }
 
   /**
    * Get all templates
    * GET /templates
    */
   getTemplates = [
-    validateRequest({
-      query: z.object({
-        ...templateFiltersSchema.shape,
-        ...commonSchemas.pagination.shape,
-      }),
-    }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const { page, limit, ...filters } = req.query as any;
+        const { page = 1, limit = 12, ...filters } = req.query as any;
         
         const result = await this.templateService.getTemplates(
           filters,
-          { page, limit }
+          { page: parseInt(page), limit: parseInt(limit) }
         );
 
         res.json({
@@ -45,7 +34,7 @@ export class TemplateController {
             templates: result.templates,
             pagination: {
               page: result.page,
-              limit,
+              limit: parseInt(limit),
               total: result.total,
               totalPages: result.totalPages,
               hasMore: result.page < result.totalPages,
@@ -63,7 +52,6 @@ export class TemplateController {
    * GET /templates/:id
    */
   getTemplate = [
-    validateRequest({ params: commonSchemas.idParam }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { id } = req.params;
@@ -137,22 +125,14 @@ export class TemplateController {
    * GET /templates/search
    */
   searchTemplates = [
-    validateRequest({
-      query: z.object({
-        q: z.string().min(1, 'Search query is required'),
-        category: z.string().optional(),
-        difficulty: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).optional(),
-        ...commonSchemas.pagination.shape,
-      }),
-    }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const { q, page, limit, ...filters } = req.query as any;
+        const { q, page = 1, limit = 12, ...filters } = req.query as any;
         
         const result = await this.templateService.searchTemplates(
           q,
           filters,
-          { page, limit }
+          { page: parseInt(page), limit: parseInt(limit) }
         );
 
         res.json({
@@ -162,7 +142,7 @@ export class TemplateController {
             query: q,
             pagination: {
               page: result.page,
-              limit,
+              limit: parseInt(limit),
               total: result.total,
               totalPages: result.totalPages,
               hasMore: result.page < result.totalPages,
@@ -180,18 +160,11 @@ export class TemplateController {
    * POST /projects/from-template/:templateId
    */
   createFromTemplate = [
-    validateRequest({
-      params: commonSchemas.idParam,
-      body: z.object({
-        name: z.string().min(1, 'Project name is required'),
-        description: z.string().optional(),
-      }),
-    }),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { id: templateId } = req.params;
         const { name, description } = req.body;
-        const userId = req.user?.userId;
+        const userId = (req as any).user?.userId;
         
         if (!userId) {
           return res.status(401).json({

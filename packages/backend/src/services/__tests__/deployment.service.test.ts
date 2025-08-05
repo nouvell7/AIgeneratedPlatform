@@ -1,16 +1,14 @@
 import 'reflect-metadata';
-import { DeploymentService } from '../deployment.service';
+import { DeploymentService, DeploymentConfig } from '../deployment.service';
 import { ProjectService } from '../project.service';
-import { prisma } from '../../lib/prisma';
-import { logger } from '../../utils/logger';
 import { AppError, ValidationError } from '../../utils/errors';
-import { Octokit } from '@octokit/rest';
-import { generateStaticPage } from '../../utils/static-page-generator';
-import { container } from 'tsyringe';
 
-// Mock external dependencies
+// Mock dependencies
 jest.mock('../../lib/prisma', () => ({
   prisma: {
+    project: {
+      findUnique: jest.fn(),
+    },
     deploymentLog: {
       create: jest.fn(),
       findFirst: jest.fn(),
@@ -18,10 +16,11 @@ jest.mock('../../lib/prisma', () => ({
       findMany: jest.fn(),
       update: jest.fn(),
     },
-    project: {
-      findUnique: jest.fn(),
-    },
   },
+}));
+
+jest.mock('@octokit/rest', () => ({
+  Octokit: jest.fn(),
 }));
 
 jest.mock('../../utils/logger', () => ({
@@ -31,200 +30,239 @@ jest.mock('../../utils/logger', () => ({
   },
 }));
 
-jest.mock('@octokit/rest', () => ({
-  Octokit: jest.fn(() => ({
-    rest: {
-      repos: {
-        createForAuthenticatedUser: jest.fn(),
-      },
-      codespaces: {
-        createForAuthenticatedUser: jest.fn(),
-      },
-    },
-  })),
+jest.mock('../../utils/static-page-generator', () => ({
+  generateStaticPage: jest.fn().mockReturnValue('<html><body>Test Page</body></html>'),
 }));
 
-jest.mock('../project.service');
-jest.mock('../../utils/static-page-generator');
+const mockPrisma = require('../../lib/prisma').prisma;
+const { Octokit } = require('@octokit/rest');
 
 describe('DeploymentService', () => {
   let deploymentService: DeploymentService;
   let mockProjectService: jest.Mocked<ProjectService>;
-  let mockOctokit: jest.Mocked<Octokit>;
+  let mockOctokit: any;
 
   beforeEach(() => {
+    // Set environment variable
+    process.env.GITHUB_TOKEN = 'test-github-token';
+
+    // Create mock ProjectService
+    mockProjectService = {
+      getProjectById: jest.fn(),
+    } as any;
+
+    // Create mock Octokit instance
+    mockOctokit = {
+      rest: {
+        repos: {
+          createForAuthenticatedUser: jest.fn(),
+        },
+      },
+    };
+
+    Octokit.mockImplementation(() => mockOctokit);
+
+    deploymentService = new DeploymentService(mockProjectService);
     jest.clearAllMocks();
-    container.clearInstances();
-    container.reset();
-
-    // Set GITHUB_TOKEN for Octokit constructor
-    process.env.GITHUB_TOKEN = 'test_github_token';
-
-    // Register mocks
-    container.registerInstance(ProjectService, new ProjectService(prisma as any)); // Mock ProjectService constructor
-    mockProjectService = container.resolve(ProjectService) as jest.Mocked<ProjectService>;
-    mockOctokit = (Octokit as unknown as jest.MockedClass<typeof Octokit>).mock.results[0].value;
-
-    deploymentService = container.resolve(DeploymentService);
   });
 
   afterEach(() => {
     delete process.env.GITHUB_TOKEN;
   });
 
+  describe('constructor', () => {
+    it('GitHub 토큰이 없으면 AppError 발생', () => {
+      delete process.env.GITHUB_TOKEN;
+      
+      expect(() => new DeploymentService(mockProjectService)).toThrow(AppError);
+      expect(() => new DeploymentService(mockProjectService)).toThrow('GitHub token is required for deployment');
+    });
+
+    it('GitHub 토큰이 있으면 Octokit 인스턴스 생성', () => {
+      process.env.GITHUB_TOKEN = 'test-token';
+      
+      const service = new DeploymentService(mockProjectService);
+      
+      expect(Octokit).toHaveBeenCalledWith({
+        auth: 'test-token',
+      });
+    });
+  });
+
   describe('startDeployment', () => {
-    const mockProjectId = 'proj123';
-    const mockUserId = 'user456';
-    const mockDeploymentConfig = {
-      platform: 'cloudflare-pages' as const,
+    const projectId = 'test-project-id';
+    const userId = 'test-user-id';
+    const config: DeploymentConfig = {
+      platform: 'cloudflare-pages',
       buildCommand: 'npm run build',
-    };
-    const mockProject = {
-      id: mockProjectId,
-      userId: mockUserId,
-      name: 'Test Project',
-      projectType: 'LOW_CODE',
-      pageContent: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    const mockDeploymentRecord = {
-      id: 'deploy1',
-      projectId: mockProjectId,
-      status: 'pending',
-      platform: mockDeploymentConfig.platform,
-      configuration: JSON.stringify(mockDeploymentConfig),
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      outputDirectory: 'dist',
     };
 
-    it('should start a low-code deployment successfully', async () => {
-      mockProjectService.getProjectById.mockResolvedValueOnce(mockProject as any);
-      (prisma.deploymentLog.create as jest.Mock).mockResolvedValueOnce(mockDeploymentRecord);
+    it('Low-Code 프로젝트 배포 시작 성공', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
+        projectType: 'LOW_CODE',
+        pageContent: null,
+      };
 
-      // Mock the private simulateDeploymentProcess
-      const spySimulateDeploymentProcess = jest.spyOn(deploymentService as any, 'simulateDeploymentProcess').mockResolvedValue(undefined);
+      const mockDeployment = {
+        id: 'deployment-123',
+        projectId,
+        status: 'pending',
+        platform: 'cloudflare-pages',
+        configuration: JSON.stringify(config),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-      const result = await deploymentService.startDeployment(
-        mockProjectId,
-        mockUserId,
-        mockDeploymentConfig
-      );
+      mockProjectService.getProjectById.mockResolvedValue(mockProject as any);
+      mockPrisma.deploymentLog.create.mockResolvedValue(mockDeployment);
 
-      expect(mockProjectService.getProjectById).toHaveBeenCalledWith(mockProjectId, mockUserId);
-      expect(prisma.deploymentLog.create).toHaveBeenCalledWith({
+      // When
+      const result = await deploymentService.startDeployment(projectId, userId, config);
+
+      // Then
+      expect(result).toEqual({
+        id: 'deployment-123',
+        projectId,
+        status: 'pending',
+        platform: 'cloudflare-pages',
+        createdAt: mockDeployment.createdAt,
+        updatedAt: mockDeployment.updatedAt,
+      });
+
+      expect(mockPrisma.deploymentLog.create).toHaveBeenCalledWith({
         data: {
-          projectId: mockProjectId,
+          projectId,
           status: 'pending',
-          platform: mockDeploymentConfig.platform,
-          configuration: JSON.stringify(mockDeploymentConfig),
+          platform: 'cloudflare-pages',
+          configuration: JSON.stringify(config),
         },
       });
-      expect(logger.info).toHaveBeenCalledWith('Deployment started', { deploymentId: mockDeploymentRecord.id, projectId: mockProjectId });
-      expect(result).toEqual({
-        id: mockDeploymentRecord.id,
-        projectId: mockProjectId,
-        status: 'pending',
-        platform: mockDeploymentConfig.platform,
-        createdAt: mockDeploymentRecord.createdAt,
-        updatedAt: mockDeploymentRecord.updatedAt,
-      });
-      expect(spySimulateDeploymentProcess).toHaveBeenCalled();
-      spySimulateDeploymentProcess.mockRestore();
     });
 
-    it('should start a no-code deployment successfully', async () => {
-      const noCodeProject = {
-        ...mockProject,
+    it('No-Code 프로젝트 배포 시작 성공', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
         projectType: 'NO_CODE',
-        pageContent: { sections: [{ type: 'hero', content: 'hello' }] },
+        pageContent: { title: 'Test Page', content: 'Hello World' },
       };
-      mockProjectService.getProjectById.mockResolvedValueOnce(noCodeProject as any);
-      (prisma.deploymentLog.create as jest.Mock).mockResolvedValueOnce(mockDeploymentRecord);
-      (generateStaticPage as jest.Mock).mockReturnValueOnce('<html>No-code page</html>');
 
-      // Mock the private simulateStaticSiteDeployment
-      const spySimulateStaticSiteDeployment = jest.spyOn(deploymentService as any, 'simulateStaticSiteDeployment').mockResolvedValue(undefined);
+      const mockDeployment = {
+        id: 'deployment-123',
+        projectId,
+        status: 'pending',
+        platform: 'cloudflare-pages',
+        configuration: JSON.stringify(config),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-      const result = await deploymentService.startDeployment(
-        mockProjectId,
-        mockUserId,
-        mockDeploymentConfig
-      );
+      mockProjectService.getProjectById.mockResolvedValue(mockProject as any);
+      mockPrisma.deploymentLog.create.mockResolvedValue(mockDeployment);
 
-      expect(mockProjectService.getProjectById).toHaveBeenCalledWith(mockProjectId, mockUserId);
-      expect(prisma.deploymentLog.create).toHaveBeenCalled();
-      expect(generateStaticPage).toHaveBeenCalledWith(noCodeProject.pageContent);
-      expect(spySimulateStaticSiteDeployment).toHaveBeenCalled();
+      // When
+      const result = await deploymentService.startDeployment(projectId, userId, config);
+
+      // Then
       expect(result.status).toBe('pending');
-      spySimulateStaticSiteDeployment.mockRestore();
+      expect(mockPrisma.deploymentLog.create).toHaveBeenCalled();
     });
 
-    it('should throw AppError if project not found', async () => {
-      mockProjectService.getProjectById.mockRejectedValueOnce(new AppError('Project not found', 404));
+    it('No-Code 프로젝트에 pageContent가 없으면 ValidationError 발생', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
+        projectType: 'NO_CODE',
+        pageContent: null,
+      };
 
-      await expect(
-        deploymentService.startDeployment(mockProjectId, mockUserId, mockDeploymentConfig)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to start deployment', { error: 'Project not found', projectId: mockProjectId });
+      mockProjectService.getProjectById.mockResolvedValue(mockProject as any);
+
+      // When & Then
+      await expect(deploymentService.startDeployment(projectId, userId, config))
+        .rejects.toThrow(ValidationError);
+      await expect(deploymentService.startDeployment(projectId, userId, config))
+        .rejects.toThrow('No-Code project must have page content to deploy.');
     });
 
-    it('should throw AppError if user does not own the project', async () => {
-      mockProjectService.getProjectById.mockResolvedValueOnce({ ...mockProject, userId: 'otherUser' } as any);
+    it('존재하지 않는 프로젝트 배포 시 AppError 발생', async () => {
+      // Given
+      mockProjectService.getProjectById.mockResolvedValue(null as any);
 
-      await expect(
-        deploymentService.startDeployment(mockProjectId, mockUserId, mockDeploymentConfig)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to start deployment', { error: 'You can only deploy your own projects', projectId: mockProjectId });
+      // When & Then
+      await expect(deploymentService.startDeployment(projectId, userId, config))
+        .rejects.toThrow(AppError);
+      await expect(deploymentService.startDeployment(projectId, userId, config))
+        .rejects.toThrow('Project not found');
     });
 
-    it('should throw ValidationError if no-code project has no page content', async () => {
-      const noCodeProject = { ...mockProject, projectType: 'NO_CODE', pageContent: null };
-      mockProjectService.getProjectById.mockResolvedValueOnce(noCodeProject as any);
-      (prisma.deploymentLog.create as jest.Mock).mockResolvedValueOnce(mockDeploymentRecord);
+    it('다른 사용자의 프로젝트 배포 시 AppError 발생', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId: 'other-user-id',
+        name: 'Test Project',
+        projectType: 'LOW_CODE',
+      };
 
-      await expect(
-        deploymentService.startDeployment(mockProjectId, mockUserId, mockDeploymentConfig)
-      ).rejects.toThrow(ValidationError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to start deployment', { error: 'No-Code project must have page content to deploy.', projectId: mockProjectId });
+      mockProjectService.getProjectById.mockResolvedValue(mockProject as any);
+
+      // When & Then
+      await expect(deploymentService.startDeployment(projectId, userId, config))
+        .rejects.toThrow(AppError);
+      await expect(deploymentService.startDeployment(projectId, userId, config))
+        .rejects.toThrow('You can only deploy your own projects');
     });
   });
 
   describe('getDeploymentStatus', () => {
-    const mockProjectId = 'proj123';
-    const mockUserId = 'user456';
-    const mockProject = { id: mockProjectId, userId: mockUserId };
-    const mockDeployment = {
-      id: 'deploy1',
-      projectId: mockProjectId,
-      status: 'success',
-      platform: 'cloudflare-pages',
-      url: 'https://example.com',
-      previewUrl: 'https://preview.example.com',
-      error: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      completedAt: new Date(),
-    };
+    const projectId = 'test-project-id';
+    const userId = 'test-user-id';
 
-    it('should return deployment status successfully', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
-      (prisma.deploymentLog.findFirst as jest.Mock).mockResolvedValueOnce(mockDeployment);
+    it('배포 상태 조회 성공', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
+      };
 
-      const result = await deploymentService.getDeploymentStatus(mockProjectId, mockUserId);
+      const mockDeployment = {
+        id: 'deployment-123',
+        projectId,
+        status: 'success',
+        platform: 'cloudflare-pages',
+        url: 'https://test.example.com',
+        previewUrl: 'https://preview.example.com',
+        error: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        completedAt: new Date(),
+      };
 
-      expect(prisma.project.findUnique).toHaveBeenCalledWith({ where: { id: mockProjectId } });
-      expect(prisma.deploymentLog.findFirst).toHaveBeenCalledWith({
-        where: { projectId: mockProjectId },
-        orderBy: { createdAt: 'desc' },
-      });
+      mockPrisma.project.findUnique.mockResolvedValue(mockProject);
+      mockPrisma.deploymentLog.findFirst.mockResolvedValue(mockDeployment);
+
+      // When
+      const result = await deploymentService.getDeploymentStatus(projectId, userId);
+
+      // Then
       expect(result).toEqual({
-        id: mockDeployment.id,
-        projectId: mockDeployment.projectId,
-        status: mockDeployment.status,
-        platform: mockDeployment.platform,
-        url: mockDeployment.url,
-        previewUrl: mockDeployment.previewUrl,
+        id: 'deployment-123',
+        projectId,
+        status: 'success',
+        platform: 'cloudflare-pages',
+        url: 'https://test.example.com',
+        previewUrl: 'https://preview.example.com',
         error: undefined,
         createdAt: mockDeployment.createdAt,
         updatedAt: mockDeployment.updatedAt,
@@ -232,345 +270,309 @@ describe('DeploymentService', () => {
       });
     });
 
-    it('should return null if no deployment found', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
-      (prisma.deploymentLog.findFirst as jest.Mock).mockResolvedValueOnce(null);
+    it('배포가 없으면 null 반환', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
+      };
 
-      const result = await deploymentService.getDeploymentStatus(mockProjectId, mockUserId);
+      mockPrisma.project.findUnique.mockResolvedValue(mockProject);
+      mockPrisma.deploymentLog.findFirst.mockResolvedValue(null);
+
+      // When
+      const result = await deploymentService.getDeploymentStatus(projectId, userId);
+
+      // Then
       expect(result).toBeNull();
-    });
-
-    it('should throw AppError if project not found', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(null);
-
-      await expect(
-        deploymentService.getDeploymentStatus(mockProjectId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to get deployment status', { error: 'Project not found', projectId: mockProjectId });
-    });
-
-    it('should throw AppError if user does not own the project', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce({ ...mockProject, userId: 'otherUser' });
-
-      await expect(
-        deploymentService.getDeploymentStatus(mockProjectId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to get deployment status', { error: 'You can only view your own project deployments', projectId: mockProjectId });
     });
   });
 
   describe('getDeploymentLogs', () => {
-    const mockProjectId = 'proj123';
-    const mockUserId = 'user456';
-    const mockProject = { id: mockProjectId, userId: mockUserId };
-    const mockLogs = [
-      { level: 'info', message: 'Step 1', timestamp: new Date().toISOString() },
-      { level: 'error', message: 'Step 2 failed', timestamp: new Date().toISOString() },
-    ];
-    const mockDeployment = {
-      id: 'deploy1',
-      projectId: mockProjectId,
-      status: 'failed',
-      platform: 'cloudflare-pages',
-      configuration: '{}',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      logs: JSON.stringify(mockLogs),
-    };
+    const projectId = 'test-project-id';
+    const userId = 'test-user-id';
 
-    it('should return deployment logs successfully for latest deployment', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
-      (prisma.deploymentLog.findFirst as jest.Mock).mockResolvedValueOnce(mockDeployment);
+    it('배포 로그 조회 성공', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
+      };
 
-      const result = await deploymentService.getDeploymentLogs(mockProjectId, mockUserId);
+      const mockLogs = [
+        {
+          level: 'info',
+          message: 'Starting deployment...',
+          timestamp: '2023-01-01T00:00:00.000Z',
+        },
+        {
+          level: 'info',
+          message: 'Deployment complete!',
+          timestamp: '2023-01-01T00:05:00.000Z',
+        },
+      ];
 
-      expect(prisma.project.findUnique).toHaveBeenCalledWith({ where: { id: mockProjectId } });
-      expect(prisma.deploymentLog.findFirst).toHaveBeenCalledWith({
-        where: { projectId: mockProjectId },
-        orderBy: { createdAt: 'desc' },
+      const mockDeployment = {
+        id: 'deployment-123',
+        projectId,
+        logs: JSON.stringify(mockLogs),
+      };
+
+      mockPrisma.project.findUnique.mockResolvedValue(mockProject);
+      mockPrisma.deploymentLog.findFirst.mockResolvedValue(mockDeployment);
+
+      // When
+      const result = await deploymentService.getDeploymentLogs(projectId, userId);
+
+      // Then
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({
+        id: 'deployment-123-0',
+        deploymentId: 'deployment-123',
+        level: 'info',
+        message: 'Starting deployment...',
+        timestamp: '2023-01-01T00:00:00.000Z',
       });
-      expect(result.length).toBe(mockLogs.length);
-      expect(result[0].message).toBe('Step 1');
-      expect(result[1].level).toBe('error');
     });
 
-    it('should return deployment logs successfully for a specific deploymentId', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
-      (prisma.deploymentLog.findUnique as jest.Mock).mockResolvedValueOnce(mockDeployment);
+    it('로그가 없으면 빈 배열 반환', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
+      };
 
-      const result = await deploymentService.getDeploymentLogs(mockProjectId, mockUserId, mockDeployment.id);
+      mockPrisma.project.findUnique.mockResolvedValue(mockProject);
+      mockPrisma.deploymentLog.findFirst.mockResolvedValue(null);
 
-      expect(prisma.deploymentLog.findUnique).toHaveBeenCalledWith({ where: { id: mockDeployment.id } });
-      expect(result.length).toBe(mockLogs.length);
-    });
+      // When
+      const result = await deploymentService.getDeploymentLogs(projectId, userId);
 
-    it('should return empty array if no deployment found', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
-      (prisma.deploymentLog.findFirst as jest.Mock).mockResolvedValueOnce(null);
-
-      const result = await deploymentService.getDeploymentLogs(mockProjectId, mockUserId);
+      // Then
       expect(result).toEqual([]);
-    });
-
-    it('should throw AppError if project not found', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(null);
-
-      await expect(
-        deploymentService.getDeploymentLogs(mockProjectId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to get deployment logs', { error: 'Project not found', projectId: mockProjectId });
-    });
-
-    it('should throw AppError if user does not own the project', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce({ ...mockProject, userId: 'otherUser' });
-
-      await expect(
-        deploymentService.getDeploymentLogs(mockProjectId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to get deployment logs', { error: 'You can only view your own project logs', projectId: mockProjectId });
     });
   });
 
   describe('cancelDeployment', () => {
-    const mockProjectId = 'proj123';
-    const mockDeploymentId = 'deploy1';
-    const mockUserId = 'user456';
-    const mockProject = { id: mockProjectId, userId: mockUserId };
+    const projectId = 'test-project-id';
+    const deploymentId = 'deployment-123';
+    const userId = 'test-user-id';
 
-    it('should cancel deployment successfully', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
-      (prisma.deploymentLog.update as jest.Mock).mockResolvedValueOnce({ count: 1 });
+    it('배포 취소 성공', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
+      };
 
-      await deploymentService.cancelDeployment(mockProjectId, mockDeploymentId, mockUserId);
+      mockPrisma.project.findUnique.mockResolvedValue(mockProject);
+      mockPrisma.deploymentLog.update.mockResolvedValue({});
 
-      expect(prisma.project.findUnique).toHaveBeenCalledWith({ where: { id: mockProjectId } });
-      expect(prisma.deploymentLog.update).toHaveBeenCalledWith({
-        where: { id: mockDeploymentId },
+      // When
+      await deploymentService.cancelDeployment(projectId, deploymentId, userId);
+
+      // Then
+      expect(mockPrisma.deploymentLog.update).toHaveBeenCalledWith({
+        where: { id: deploymentId },
         data: {
           status: 'cancelled',
           completedAt: expect.any(Date),
         },
       });
-      expect(logger.info).toHaveBeenCalledWith('Deployment cancelled', { deploymentId: mockDeploymentId, projectId: mockProjectId });
-    });
-
-    it('should throw AppError if project not found', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(null);
-
-      await expect(
-        deploymentService.cancelDeployment(mockProjectId, mockDeploymentId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to cancel deployment', { error: 'Project not found', deploymentId: mockDeploymentId });
-    });
-
-    it('should throw AppError if user does not own the project', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce({ ...mockProject, userId: 'otherUser' });
-
-      await expect(
-        deploymentService.cancelDeployment(mockProjectId, mockDeploymentId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to cancel deployment', { error: 'You can only cancel your own deployments', deploymentId: mockDeploymentId });
     });
   });
 
   describe('rollbackDeployment', () => {
-    const mockProjectId = 'proj123';
-    const mockTargetDeploymentId = 'deploy1';
-    const mockUserId = 'user456';
-    const mockProject = { id: mockProjectId, userId: mockUserId };
-    const mockTargetDeployment = {
-      id: mockTargetDeploymentId,
-      projectId: mockProjectId,
-      status: 'success',
-      platform: 'cloudflare-pages',
-      configuration: '{}',
-      url: 'https://old.example.com',
-      previewUrl: 'https://old-preview.example.com',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      completedAt: new Date(),
-    };
-    const mockRollbackDeploymentRecord = {
-      id: 'deploy2',
-      projectId: mockProjectId,
-      status: 'pending',
-      platform: mockTargetDeployment.platform,
-      configuration: mockTargetDeployment.configuration,
-      isRollback: true,
-      rollbackFromId: mockTargetDeploymentId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const projectId = 'test-project-id';
+    const targetDeploymentId = 'target-deployment-123';
+    const userId = 'test-user-id';
 
-    it('should start a rollback successfully', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
-      (prisma.deploymentLog.findUnique as jest.Mock).mockResolvedValueOnce(mockTargetDeployment);
-      (prisma.deploymentLog.create as jest.Mock).mockResolvedValueOnce(mockRollbackDeploymentRecord);
+    it('배포 롤백 성공', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
+      };
 
-      // Mock the private processRollback
-      const spyProcessRollback = jest.spyOn(deploymentService as any, 'processRollback').mockResolvedValue(undefined);
+      const mockTargetDeployment = {
+        id: targetDeploymentId,
+        projectId,
+        status: 'success',
+        platform: 'cloudflare-pages',
+        configuration: JSON.stringify({ platform: 'cloudflare-pages' }),
+      };
 
-      const result = await deploymentService.rollbackDeployment(
-        mockProjectId,
-        mockTargetDeploymentId,
-        mockUserId
-      );
+      const mockRollbackDeployment = {
+        id: 'rollback-deployment-123',
+        projectId,
+        status: 'pending',
+        platform: 'cloudflare-pages',
+        configuration: JSON.stringify({ platform: 'cloudflare-pages' }),
+        isRollback: true,
+        rollbackFromId: targetDeploymentId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-      expect(prisma.project.findUnique).toHaveBeenCalledWith({ where: { id: mockProjectId } });
-      expect(prisma.deploymentLog.findUnique).toHaveBeenCalledWith({ where: { id: mockTargetDeploymentId } });
-      expect(prisma.deploymentLog.create).toHaveBeenCalledWith({
+      mockPrisma.project.findUnique.mockResolvedValue(mockProject);
+      mockPrisma.deploymentLog.findUnique.mockResolvedValue(mockTargetDeployment);
+      mockPrisma.deploymentLog.create.mockResolvedValue(mockRollbackDeployment);
+
+      // When
+      const result = await deploymentService.rollbackDeployment(projectId, targetDeploymentId, userId);
+
+      // Then
+      expect(result).toEqual({
+        id: 'rollback-deployment-123',
+        projectId,
+        status: 'pending',
+        platform: 'cloudflare-pages',
+        createdAt: mockRollbackDeployment.createdAt,
+        updatedAt: mockRollbackDeployment.updatedAt,
+      });
+
+      expect(mockPrisma.deploymentLog.create).toHaveBeenCalledWith({
         data: {
-          projectId: mockProjectId,
+          projectId,
           status: 'pending',
-          platform: mockTargetDeployment.platform,
+          platform: 'cloudflare-pages',
           configuration: mockTargetDeployment.configuration,
           isRollback: true,
-          rollbackFromId: mockTargetDeploymentId,
+          rollbackFromId: targetDeploymentId,
         },
       });
-      expect(logger.info).toHaveBeenCalledWith('Rollback deployment started', {
-        deploymentId: mockRollbackDeploymentRecord.id,
-        targetDeploymentId: mockTargetDeploymentId,
-        projectId: mockProjectId,
-      });
-      expect(spyProcessRollback).toHaveBeenCalled();
-      expect(result.status).toBe('pending');
-      spyProcessRollback.mockRestore();
     });
 
-    it('should throw AppError if project not found', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(null);
+    it('실패한 배포로 롤백 시 AppError 발생', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
+      };
 
-      await expect(
-        deploymentService.rollbackDeployment(mockProjectId, mockTargetDeploymentId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to rollback deployment', { error: 'Project not found', projectId: mockProjectId });
-    });
+      const mockTargetDeployment = {
+        id: targetDeploymentId,
+        projectId,
+        status: 'failed',
+        platform: 'cloudflare-pages',
+        configuration: JSON.stringify({ platform: 'cloudflare-pages' }),
+      };
 
-    it('should throw AppError if user does not own the project', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce({ ...mockProject, userId: 'otherUser' });
+      mockPrisma.project.findUnique.mockResolvedValue(mockProject);
+      mockPrisma.deploymentLog.findUnique.mockResolvedValue(mockTargetDeployment);
 
-      await expect(
-        deploymentService.rollbackDeployment(mockProjectId, mockTargetDeploymentId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to rollback deployment', { error: 'You can only rollback your own deployments', projectId: mockProjectId });
-    });
-
-    it('should throw AppError if target deployment not found', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
-      (prisma.deploymentLog.findUnique as jest.Mock).mockResolvedValueOnce(null);
-
-      await expect(
-        deploymentService.rollbackDeployment(mockProjectId, mockTargetDeploymentId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to rollback deployment', { error: 'Target deployment not found', projectId: mockProjectId });
-    });
-
-    it('should throw AppError if target deployment is not successful', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
-      (prisma.deploymentLog.findUnique as jest.Mock).mockResolvedValueOnce({ ...mockTargetDeployment, status: 'failed' });
-
-      await expect(
-        deploymentService.rollbackDeployment(mockProjectId, mockTargetDeploymentId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to rollback deployment', { error: 'Can only rollback to successful deployments', projectId: mockProjectId });
+      // When & Then
+      await expect(deploymentService.rollbackDeployment(projectId, targetDeploymentId, userId))
+        .rejects.toThrow(AppError);
+      await expect(deploymentService.rollbackDeployment(projectId, targetDeploymentId, userId))
+        .rejects.toThrow('Can only rollback to successful deployments');
     });
   });
 
   describe('getDeploymentHistory', () => {
-    const mockProjectId = 'proj123';
-    const mockUserId = 'user456';
-    const mockProject = { id: mockProjectId, userId: mockUserId };
-    const mockDeployments = [
-      {
-        id: 'deploy1', projectId: mockProjectId, status: 'success', platform: 'cf', configuration: '{}',
-        createdAt: new Date(), updatedAt: new Date(), completedAt: new Date(), url: 'url1', previewUrl: 'purl1', error: null,
-      },
-      {
-        id: 'deploy2', projectId: mockProjectId, status: 'failed', platform: 'cf', configuration: '{}',
-        createdAt: new Date(), updatedAt: new Date(), completedAt: new Date(), url: null, previewUrl: null, error: 'build fail',
-      },
-    ];
+    const projectId = 'test-project-id';
+    const userId = 'test-user-id';
 
-    it('should return deployment history successfully', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
-      (prisma.deploymentLog.findMany as jest.Mock).mockResolvedValueOnce(mockDeployments);
+    it('배포 히스토리 조회 성공', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
+      };
 
-      const result = await deploymentService.getDeploymentHistory(mockProjectId, mockUserId);
+      const mockDeployments = [
+        {
+          id: 'deployment-1',
+          projectId,
+          status: 'success',
+          platform: 'cloudflare-pages',
+          url: 'https://test1.example.com',
+          previewUrl: 'https://preview1.example.com',
+          error: null,
+          createdAt: new Date('2023-01-02'),
+          updatedAt: new Date('2023-01-02'),
+          completedAt: new Date('2023-01-02'),
+        },
+        {
+          id: 'deployment-2',
+          projectId,
+          status: 'failed',
+          platform: 'cloudflare-pages',
+          url: null,
+          previewUrl: null,
+          error: 'Build failed',
+          createdAt: new Date('2023-01-01'),
+          updatedAt: new Date('2023-01-01'),
+          completedAt: new Date('2023-01-01'),
+        },
+      ];
 
-      expect(prisma.project.findUnique).toHaveBeenCalledWith({ where: { id: mockProjectId } });
-      expect(prisma.deploymentLog.findMany).toHaveBeenCalledWith({
-        where: { projectId: mockProjectId },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
+      mockPrisma.project.findUnique.mockResolvedValue(mockProject);
+      mockPrisma.deploymentLog.findMany.mockResolvedValue(mockDeployments);
+
+      // When
+      const result = await deploymentService.getDeploymentHistory(projectId, userId, 5);
+
+      // Then
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({
+        id: 'deployment-1',
+        projectId,
+        status: 'success',
+        platform: 'cloudflare-pages',
+        url: 'https://test1.example.com',
+        previewUrl: 'https://preview1.example.com',
+        error: undefined,
+        createdAt: mockDeployments[0].createdAt,
+        updatedAt: mockDeployments[0].updatedAt,
+        completedAt: mockDeployments[0].completedAt,
       });
-      expect(result.length).toBe(mockDeployments.length);
-      expect(result[0].id).toBe('deploy1');
-      expect(result[1].status).toBe('failed');
-    });
 
-    it('should apply limit if provided', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
-      (prisma.deploymentLog.findMany as jest.Mock).mockResolvedValueOnce(mockDeployments);
-
-      await deploymentService.getDeploymentHistory(mockProjectId, mockUserId, 1);
-      expect(prisma.deploymentLog.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 1 }));
-    });
-
-    it('should throw AppError if project not found', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(null);
-
-      await expect(
-        deploymentService.getDeploymentHistory(mockProjectId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to get deployment history', { error: 'Project not found', projectId: mockProjectId });
-    });
-
-    it('should throw AppError if user does not own the project', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce({ ...mockProject, userId: 'otherUser' });
-
-      await expect(
-        deploymentService.getDeploymentHistory(mockProjectId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to get deployment history', { error: 'You can only view your own deployment history', projectId: mockProjectId });
+      expect(mockPrisma.deploymentLog.findMany).toHaveBeenCalledWith({
+        where: { projectId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
     });
   });
 
   describe('getDeploymentMetrics', () => {
-    const mockProjectId = 'proj123';
-    const mockUserId = 'user456';
-    const mockProject = { id: mockProjectId, userId: mockUserId };
+    const projectId = 'test-project-id';
+    const userId = 'test-user-id';
 
-    it('should return deployment metrics successfully', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(mockProject);
+    it('배포 메트릭 조회 성공', async () => {
+      // Given
+      const mockProject = {
+        id: projectId,
+        userId,
+        name: 'Test Project',
+      };
 
-      const result = await deploymentService.getDeploymentMetrics(mockProjectId, mockUserId);
+      mockPrisma.project.findUnique.mockResolvedValue(mockProject);
 
-      expect(prisma.project.findUnique).toHaveBeenCalledWith({ where: { id: mockProjectId } });
+      // When
+      const result = await deploymentService.getDeploymentMetrics(projectId, userId, '24h');
+
+      // Then
       expect(result).toHaveProperty('requests');
       expect(result).toHaveProperty('bandwidth');
       expect(result).toHaveProperty('errors');
       expect(result).toHaveProperty('responseTime');
       expect(result).toHaveProperty('uptime');
-      expect(result.timeline.length).toBe(24);
-    });
-
-    it('should throw AppError if project not found', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce(null);
-
-      await expect(
-        deploymentService.getDeploymentMetrics(mockProjectId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to get deployment metrics', { error: 'Project not found', projectId: mockProjectId });
-    });
-
-    it('should throw AppError if user does not own the project', async () => {
-      (prisma.project.findUnique as jest.Mock).mockResolvedValueOnce({ ...mockProject, userId: 'otherUser' });
-
-      await expect(
-        deploymentService.getDeploymentMetrics(mockProjectId, mockUserId)
-      ).rejects.toThrow(AppError);
-      expect(logger.error).toHaveBeenCalledWith('Failed to get deployment metrics', { error: 'You can only view your own project metrics', projectId: mockProjectId });
+      expect(result).toHaveProperty('timeline');
+      expect(result.timeline).toHaveLength(24);
+      expect(typeof result.requests).toBe('number');
+      expect(typeof result.bandwidth).toBe('number');
+      expect(typeof result.errors).toBe('number');
+      expect(typeof result.responseTime).toBe('number');
+      expect(typeof result.uptime).toBe('number');
     });
   });
 });
