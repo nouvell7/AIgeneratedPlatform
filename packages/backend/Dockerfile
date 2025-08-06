@@ -1,63 +1,56 @@
-# Multi-stage build for production optimization
+# Multi-stage build for Node.js backend
 FROM node:18-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
+# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY packages/backend/package*.json ./packages/backend/
+# Install dependencies based on the preferred package manager
+COPY package.json package-lock.json* ./
+COPY packages/backend/package.json ./packages/backend/
+COPY packages/shared/package.json ./packages/shared/
+RUN npm ci --only=production
 
-# Install dependencies
-RUN npm ci && npm cache clean --force
-
-# Development stage
-FROM base AS dev
+# Rebuild the source code only when needed
+FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-EXPOSE 3001
-ENV PORT 3001
+# Generate Prisma client
+RUN cd packages/backend && npx prisma generate
 
-CMD ["npm", "run", "dev", "--workspace=backend"]
+# Build the backend
+RUN npm run build:backend
 
-# Build stage
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY packages/backend ./packages/backend
-COPY packages/shared ./packages/shared
-COPY .eslintrc.js ./
-COPY package.json ./
-COPY .prettierrc ./
-COPY .prettierignore ./
-
-# Generate Prisma client and build
-RUN npm run build --workspace=shared
-RUN npm run db:generate --workspace=backend
-RUN npm run build --workspace=backend
-
-# Production stage
+# Production image, copy all the files and run the app
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
+ENV PORT 3001
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 backend
 
 # Copy built application
-COPY --from=builder --chown=backend:nodejs /app/packages/backend/dist ./dist
-COPY --from=builder --chown=backend:nodejs /app/packages/backend/package*.json ./
-COPY --from=builder --chown=backend:nodejs /app/packages/backend/prisma ./prisma
-COPY --from=deps --chown=backend:nodejs /app/node_modules ./node_modules
+COPY --from=builder /app/packages/backend/dist ./dist
+COPY --from=builder /app/packages/backend/prisma ./prisma
+COPY --from=builder /app/packages/shared/dist ./shared
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/packages/backend/package.json ./package.json
+
+# Create uploads directory
+RUN mkdir -p /app/uploads && chown backend:nodejs /app/uploads
 
 USER backend
 
 EXPOSE 3001
-ENV PORT 3001
 
-CMD ["npm", "start"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+CMD ["node", "dist/index.js"]

@@ -1,0 +1,205 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      version:
+        description: 'Version to rollback to'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  rollback:
+    name: Rollback ${{ github.event.inputs.environment }} to ${{ github.event.inputs.version }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Confirm rollback
+      run: |
+        echo "🔄 Rolling back ${{ github.event.inputs.environment }} to version ${{ github.event.inputs.version }}"
+        echo "This action will:"
+        echo "- Stop current containers"
+        echo "- Deploy version ${{ github.event.inputs.version }}"
+        echo "- Run database migrations if needed"
+        echo "- Perform health checks"
+    
+    - name: Rollback deployment
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key: ${{ secrets.DEPLOY_KEY }}
+        port: ${{ secrets.DEPLOY_PORT }}
+        script: |
+          # Navigate to deployment directory
+          cd /opt/ai-platform
+          
+          # Set environment variables
+          export ENVIRONMENT=${{ github.event.inputs.environment }}
+          export ROLLBACK_VERSION=${{ github.event.inputs.version }}
+          
+          # Load environment-specific variables
+          if [ -f ".env.$ENVIRONMENT" ]; then
+            export $(cat .env.$ENVIRONMENT | grep -v '^#' | xargs)
+          fi
+          
+          echo "🔄 Starting rollback to version $ROLLBACK_VERSION..."
+          
+          # Create backup of current state
+          docker-compose ps > rollback_backup_$(date +%Y%m%d_%H%M%S).txt
+          
+          # Pull the rollback version images
+          echo "📦 Pulling rollback images..."
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:$ROLLBACK_VERSION
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:$ROLLBACK_VERSION
+          
+          # Update docker-compose with rollback image tags
+          echo "🔧 Updating docker-compose configuration..."
+          sed -i "s|image: .*-backend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:$ROLLBACK_VERSION|g" docker-compose.yml
+          sed -i "s|image: .*-frontend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:$ROLLBACK_VERSION|g" docker-compose.yml
+          
+          # Stop current containers
+          echo "🛑 Stopping current containers..."
+          docker-compose down
+          
+          # Start containers with rollback version
+          echo "🚀 Starting containers with rollback version..."
+          if [ "$ENVIRONMENT" = "production" ]; then
+            docker-compose --profile production up -d
+          else
+            docker-compose up -d
+          fi
+          
+          # Wait for services to be healthy
+          echo "⏳ Waiting for services to be healthy..."
+          sleep 30
+          
+          # Check if database migration is needed
+          echo "🔍 Checking database state..."
+          # Note: Be careful with migrations during rollback
+          # Only run if absolutely necessary and safe
+          
+          # Health check
+          echo "🏥 Running health checks..."
+          if [ "$ENVIRONMENT" = "production" ]; then
+            curl -f http://localhost/health || exit 1
+            curl -f http://localhost/api/health || exit 1
+          else
+            curl -f http://localhost:3000/health || exit 1
+            curl -f http://localhost:3001/health || exit 1
+          fi
+          
+          echo "✅ Rollback completed successfully!"
+          
+          # Log the rollback
+          echo "$(date): Rolled back $ENVIRONMENT to version $ROLLBACK_VERSION by ${{ github.actor }}" >> rollback.log
+    
+    - name: Verify rollback
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key: ${{ secrets.DEPLOY_KEY }}
+        port: ${{ secrets.DEPLOY_PORT }}
+        script: |
+          cd /opt/ai-platform
+          
+          # Verify the correct version is running
+          echo "🔍 Verifying rollback version..."
+          
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            BASE_URL="https://ai-platform.com"
+          else
+            BASE_URL="https://staging.ai-platform.com"
+          fi
+          
+          # Test frontend
+          echo "Testing frontend..."
+          curl -f "$BASE_URL" || exit 1
+          
+          # Test API health
+          echo "Testing API health..."
+          curl -f "$BASE_URL/api/health" || exit 1
+          
+          # Test authentication endpoint
+          echo "Testing authentication..."
+          curl -f "$BASE_URL/api/auth/health" || exit 1
+          
+          # Check container status
+          echo "Container status:"
+          docker-compose ps
+          
+          echo "✅ Rollback verification completed!"
+    
+    - name: Notify rollback success
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+        custom_payload: |
+          {
+            text: "🔄 Rollback to ${{ github.event.inputs.environment }} completed successfully!",
+            attachments: [{
+              color: 'warning',
+              fields: [{
+                title: 'Environment',
+                value: '${{ github.event.inputs.environment }}',
+                short: true
+              }, {
+                title: 'Rolled back to version',
+                value: '${{ github.event.inputs.version }}',
+                short: true
+              }, {
+                title: 'Initiated by',
+                value: '${{ github.actor }}',
+                short: true
+              }]
+            }]
+          }
+    
+    - name: Notify rollback failure
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+        custom_payload: |
+          {
+            text: "❌ Rollback to ${{ github.event.inputs.environment }} failed!",
+            attachments: [{
+              color: 'danger',
+              fields: [{
+                title: 'Environment',
+                value: '${{ github.event.inputs.environment }}',
+                short: true
+              }, {
+                title: 'Attempted rollback to',
+                value: '${{ github.event.inputs.version }}',
+                short: true
+              }, {
+                title: 'Failed by',
+                value: '${{ github.actor }}',
+                short: true
+              }]
+            }]
+          }

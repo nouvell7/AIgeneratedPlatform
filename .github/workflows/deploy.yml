@@ -1,0 +1,191 @@
+name: Deploy to Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      version:
+        description: 'Version to deploy (leave empty for latest)'
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Determine image tag
+      id: tag
+      run: |
+        if [ -n "${{ github.event.inputs.version }}" ]; then
+          echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "tag=latest" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key: ${{ secrets.DEPLOY_KEY }}
+        port: ${{ secrets.DEPLOY_PORT }}
+        script: |
+          # Navigate to deployment directory
+          cd /opt/ai-platform
+          
+          # Set environment variables
+          export ENVIRONMENT=${{ github.event.inputs.environment }}
+          export IMAGE_TAG=${{ steps.tag.outputs.tag }}
+          
+          # Load environment-specific variables
+          if [ -f ".env.$ENVIRONMENT" ]; then
+            export $(cat .env.$ENVIRONMENT | grep -v '^#' | xargs)
+          fi
+          
+          # Pull latest images
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ steps.tag.outputs.tag }}
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ steps.tag.outputs.tag }}
+          
+          # Update docker-compose with new image tags
+          sed -i "s|image: .*-backend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ steps.tag.outputs.tag }}|g" docker-compose.yml
+          sed -i "s|image: .*-frontend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ steps.tag.outputs.tag }}|g" docker-compose.yml
+          
+          # Stop existing containers
+          docker-compose down
+          
+          # Start new containers
+          if [ "$ENVIRONMENT" = "production" ]; then
+            docker-compose --profile production up -d
+          else
+            docker-compose up -d
+          fi
+          
+          # Wait for services to be healthy
+          echo "Waiting for services to be healthy..."
+          sleep 30
+          
+          # Run database migrations
+          docker-compose exec -T backend npm run migrate
+          
+          # Health check
+          if [ "$ENVIRONMENT" = "production" ]; then
+            curl -f http://localhost/health || exit 1
+            curl -f http://localhost/api/health || exit 1
+          else
+            curl -f http://localhost:3000/health || exit 1
+            curl -f http://localhost:3001/health || exit 1
+          fi
+          
+          echo "Deployment completed successfully!"
+    
+    - name: Run smoke tests
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key: ${{ secrets.DEPLOY_KEY }}
+        port: ${{ secrets.DEPLOY_PORT }}
+        script: |
+          # Run basic smoke tests
+          cd /opt/ai-platform
+          
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            BASE_URL="https://ai-platform.com"
+          else
+            BASE_URL="https://staging.ai-platform.com"
+          fi
+          
+          # Test frontend
+          curl -f "$BASE_URL" || exit 1
+          
+          # Test API health
+          curl -f "$BASE_URL/api/health" || exit 1
+          
+          # Test authentication endpoint
+          curl -f "$BASE_URL/api/auth/health" || exit 1
+          
+          echo "Smoke tests passed!"
+    
+    - name: Notify deployment success
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+        custom_payload: |
+          {
+            text: "🚀 Deployment to ${{ github.event.inputs.environment }} completed successfully!",
+            attachments: [{
+              color: 'good',
+              fields: [{
+                title: 'Environment',
+                value: '${{ github.event.inputs.environment }}',
+                short: true
+              }, {
+                title: 'Version',
+                value: '${{ steps.tag.outputs.tag }}',
+                short: true
+              }, {
+                title: 'Deployed by',
+                value: '${{ github.actor }}',
+                short: true
+              }]
+            }]
+          }
+    
+    - name: Notify deployment failure
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+        custom_payload: |
+          {
+            text: "❌ Deployment to ${{ github.event.inputs.environment }} failed!",
+            attachments: [{
+              color: 'danger',
+              fields: [{
+                title: 'Environment',
+                value: '${{ github.event.inputs.environment }}',
+                short: true
+              }, {
+                title: 'Version',
+                value: '${{ steps.tag.outputs.tag }}',
+                short: true
+              }, {
+                title: 'Failed by',
+                value: '${{ github.actor }}',
+                short: true
+              }]
+            }]
+          }

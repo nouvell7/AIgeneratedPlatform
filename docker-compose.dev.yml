@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ai-platform-postgres-dev
+    environment:
+      POSTGRES_DB: ai_platform_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - ai-platform-dev-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ai-platform-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - ai-platform-dev-network
+
+  # Backend API (Development)
+  backend:
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile
+      target: deps
+    container_name: ai-platform-backend-dev
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ai_platform_dev
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-jwt-secret-key
+      - JWT_REFRESH_SECRET=dev-jwt-refresh-secret-key
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./packages/backend:/app
+      - /app/node_modules
+    networks:
+      - ai-platform-dev-network
+    command: npm run dev
+
+  # Frontend (Development)
+  frontend:
+    build:
+      context: .
+      dockerfile: packages/frontend/Dockerfile
+      target: deps
+    container_name: ai-platform-frontend-dev
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - NEXT_PUBLIC_FRONTEND_URL=http://localhost:3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./packages/frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - ai-platform-dev-network
+    command: npm run dev
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+
+networks:
+  ai-platform-dev-network:
+    driver: bridge

@@ -1,11 +1,29 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useAppSelector } from '../../store';
+import { useAppSelector, useAppDispatch } from '../../store';
+import { toggleSidebar } from '../../store/slices/uiSlice';
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
+  const { sidebarOpen: isSidebarOpen } = useAppSelector((state) => state.ui);
+
+  const handleLinkClick = () => {
+    if (onClose) {
+      onClose();
+    }
+    // Close sidebar on mobile after navigation
+    if (window.innerWidth < 1024) {
+      dispatch(toggleSidebar());
+    }
+  };
 
   const navigation = [
     {
@@ -66,29 +84,56 @@ const Sidebar: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col h-full bg-white border-r border-gray-200">
-      {/* User info */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center">
-          <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-            {user?.profileImage ? (
-              <img
-                src={user.profileImage}
-                alt={user.username}
-                className="w-10 h-10 rounded-full"
-              />
-            ) : (
-              <span className="text-primary-600 font-medium text-lg">
-                {user?.username?.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
-          <div className="ml-3">
-            <p className="text-sm font-medium text-gray-900">{user?.username}</p>
-            <p className="text-xs text-gray-500">{user?.email}</p>
+    <>
+      {/* Mobile overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+          onClick={() => dispatch(toggleSidebar())}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <div className={`
+        fixed lg:static inset-y-0 left-0 z-50 w-64 
+        transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
+        lg:translate-x-0 transition-transform duration-300 ease-in-out
+        flex flex-col h-full bg-white border-r border-gray-200
+      `}>
+        {/* Mobile close button */}
+        <div className="lg:hidden flex justify-end p-4">
+          <button
+            onClick={() => dispatch(toggleSidebar())}
+            className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* User info */}
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center">
+            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+              {user?.profileImage ? (
+                <img
+                  src={user.profileImage}
+                  alt={user.username}
+                  className="w-10 h-10 rounded-full"
+                />
+              ) : (
+                <span className="text-primary-600 font-medium text-lg">
+                  {user?.username?.charAt(0).toUpperCase()}
+                </span>
+              )}
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-gray-900">{user?.username}</p>
+              <p className="text-xs text-gray-500">{user?.email}</p>
+            </div>
           </div>
         </div>
-      </div>
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
@@ -99,11 +144,12 @@ const Sidebar: React.FC = () => {
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`flex items-center px-3 py-3 text-sm font-medium rounded-md transition-colors touch-manipulation ${
                 isActive
                   ? 'bg-primary-100 text-primary-700'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }`}
+              onClick={handleLinkClick}
             >
               <span className="mr-3">{item.icon}</span>
               {item.name}
@@ -116,15 +162,17 @@ const Sidebar: React.FC = () => {
       <div className="p-4 border-t border-gray-200">
         <Link
           href="/projects/new"
-          className="btn-primary w-full justify-center"
+          className="btn-primary w-full justify-center py-3 touch-manipulation"
+          onClick={handleLinkClick}
         >
           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           New Project
         </Link>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

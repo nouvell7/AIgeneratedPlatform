@@ -1,61 +1,59 @@
-# Multi-stage build for production optimization
+# Multi-stage build for Next.js frontend
 FROM node:18-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
+# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY packages/frontend/package*.json ./packages/frontend/
+# Install dependencies based on the preferred package manager
+COPY package.json package-lock.json* ./
+COPY packages/frontend/package.json ./packages/frontend/
+COPY packages/shared/package.json ./packages/shared/
+RUN npm ci --only=production
 
-# Install dependencies
-RUN npm ci && npm cache clean --force
-
-# Development stage
-FROM base AS dev
+# Rebuild the source code only when needed
+FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-EXPOSE 3000
-ENV PORT 3000
+# Build arguments for environment variables
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_FRONTEND_URL
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ARG NEXT_PUBLIC_GITHUB_CLIENT_ID
 
-CMD ["npm", "run", "dev", "--workspace=frontend"]
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ENV NEXT_PUBLIC_GITHUB_CLIENT_ID=$NEXT_PUBLIC_GITHUB_CLIENT_ID
 
-# Build stage
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY packages/frontend ./packages/frontend
-COPY packages/shared ./packages/shared
-COPY .eslintrc.js ./
-COPY package.json ./
-COPY .prettierrc ./
-COPY .prettierignore ./
+# Build the frontend
+RUN npm run build:frontend
 
-# Build application
-RUN npm run build --workspace=shared
-RUN npm run build --workspace=frontend
-
-# Production stage
+# Production image, copy all the files and run next
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
+ENV PORT 3000
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copy built application
-COPY --from=builder /app/packages/frontend/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/packages/frontend/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/packages/frontend/.next/static ./.next/static
+COPY --from=builder /app/packages/frontend/.next/standalone ./
+COPY --from=builder /app/packages/frontend/.next/static ./packages/frontend/.next/static
+COPY --from=builder /app/packages/frontend/public ./packages/frontend/public
 
 USER nextjs
 
 EXPOSE 3000
-ENV PORT 3000
 
-CMD ["node", "server.js"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+CMD ["node", "packages/frontend/server.js"]
