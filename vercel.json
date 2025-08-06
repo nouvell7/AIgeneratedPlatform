@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build:frontend",
+  "outputDirectory": "packages/frontend/.next",
+  "installCommand": "npm ci",
+  "framework": "nextjs",
+  "functions": {
+    "packages/frontend/src/pages/api/**/*.ts": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/((?!health).*)",
+      "destination": "$BACKEND_URL/api/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_API_URL": "$BACKEND_URL",
+    "NEXT_PUBLIC_FRONTEND_URL": "$VERCEL_URL"
+  }
+}
