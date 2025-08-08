@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { injectable, inject } from 'tsyringe';
-import { UserSettingsService, UserSettings } from '../services/user-settings.service';
+import { UserSettingsService, UserSettings } from '../services/userSettings.service';
 import { validateRequest } from '../lib/validation';
 import { z } from 'zod';
 

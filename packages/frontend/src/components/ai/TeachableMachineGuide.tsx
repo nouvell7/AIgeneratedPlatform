@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Link from 'next/link';
 
 interface TeachableMachineGuideProps {
   onModelUrlSubmit: (url: string, modelType: string) => void;

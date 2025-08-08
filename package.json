@@ -11,6 +11,8 @@
     "dev:backend": "npm run dev --workspace=packages/backend",
     "dev:frontend": "npm run dev --workspace=packages/frontend",
     "build": "npm run build --workspace=packages/backend && npm run build --workspace=packages/frontend",
+    "build:backend": "npm run build --workspace=packages/backend",
+    "build:frontend": "npm run build --workspace=packages/frontend",
     "start": "npm run start --workspace=packages/backend",
     "test": "npm run test --workspaces",
     "test:backend": "npm run test --workspace=packages/backend",
@@ -23,7 +25,9 @@
     "type-check": "npm run type-check --workspaces",
     "db:generate": "npm run db:generate --workspace=packages/backend",
     "db:push": "npm run db:push --workspace=packages/backend",
-    "db:seed": "npm run db:seed --workspace=packages/backend"
+    "db:seed": "npm run db:seed --workspace=packages/backend",
+    "deploy": "./scripts/deploy.sh production",
+    "deploy:dev": "./scripts/deploy.sh development"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

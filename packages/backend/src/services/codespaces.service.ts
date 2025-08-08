@@ -15,17 +15,26 @@ export type CodespaceInfo = any;
 
 @injectable()
 export class CodespacesService {
-  private octokit: Octokit;
+  private octokit: Octokit | null = null;
+  private isEnabled: boolean = false;
 
   constructor() {
     const githubToken = process.env.GITHUB_TOKEN;
-    if (!githubToken) {
-      throw new AppError('GitHub token is required for Codespaces integration', 500);
+    if (githubToken) {
+      this.octokit = new Octokit({
+        auth: githubToken,
+      });
+      this.isEnabled = true;
+      logger.info('CodespacesService initialized with GitHub token');
+    } else {
+      logger.warn('GitHub token not provided. Codespaces features will be disabled.');
     }
+  }
 
-    this.octokit = new Octokit({
-      auth: githubToken,
-    });
+  private checkEnabled() {
+    if (!this.isEnabled || !this.octokit) {
+      throw new AppError('Codespaces service is not available. GitHub token is required.', 503);
+    }
   }
 
   /**
@@ -35,10 +44,12 @@ export class CodespacesService {
     repositoryId: number,
     config: CodespaceConfig
   ): Promise<CodespaceInfo> {
+    this.checkEnabled();
+    
     try {
       logger.info('Creating codespace', { repositoryId, config });
 
-      const response = await this.octokit.rest.codespaces.createForAuthenticatedUser({
+      const response = await this.octokit!.rest.codespaces.createForAuthenticatedUser({
         repository_id: repositoryId,
         ref: config.branch || 'main',
         machine: config.machine || 'basicLinux32gb',
@@ -66,8 +77,10 @@ export class CodespacesService {
    * Get codespace information
    */
   async getCodespace(codespaceId: string): Promise<CodespaceInfo> {
+    this.checkEnabled();
+    
     try {
-      const response = await this.octokit.rest.codespaces.getForAuthenticatedUser({
+      const response = await this.octokit!.rest.codespaces.getForAuthenticatedUser({
         codespace_name: codespaceId,
       });
 
@@ -85,8 +98,10 @@ export class CodespacesService {
    * List codespaces for a user
    */
   async listCodespaces(repositoryId?: number): Promise<CodespaceInfo[]> {
+    this.checkEnabled();
+    
     try {
-      const response = await this.octokit.rest.codespaces.listForAuthenticatedUser({
+      const response = await this.octokit!.rest.codespaces.listForAuthenticatedUser({
         repository_id: repositoryId,
       });
 
@@ -104,8 +119,10 @@ export class CodespacesService {
    * Start a codespace
    */
   async startCodespace(codespaceId: string): Promise<CodespaceInfo> {
+    this.checkEnabled();
+    
     try {
-      const response = await this.octokit.rest.codespaces.startForAuthenticatedUser({
+      const response = await this.octokit!.rest.codespaces.startForAuthenticatedUser({
         codespace_name: codespaceId,
       });
 
@@ -123,8 +140,10 @@ export class CodespacesService {
    * Stop a codespace
    */
   async stopCodespace(codespaceId: string): Promise<CodespaceInfo> {
+    this.checkEnabled();
+    
     try {
-      const response = await this.octokit.rest.codespaces.stopForAuthenticatedUser({
+      const response = await this.octokit!.rest.codespaces.stopForAuthenticatedUser({
         codespace_name: codespaceId,
       });
 
@@ -142,8 +161,10 @@ export class CodespacesService {
    * Delete a codespace
    */
   async deleteCodespace(codespaceId: string): Promise<void> {
+    this.checkEnabled();
+    
     try {
-      await this.octokit.rest.codespaces.deleteForAuthenticatedUser({
+      await this.octokit!.rest.codespaces.deleteForAuthenticatedUser({
         codespace_name: codespaceId,
       });
 
@@ -169,9 +190,11 @@ export class CodespacesService {
     repository: any;
     codespace: any;
   }> {
+    this.checkEnabled();
+    
     try {
       // Create repository
-      const repoResponse = await this.octokit.rest.repos.createForAuthenticatedUser({
+      const repoResponse = await this.octokit!.rest.repos.createForAuthenticatedUser({
         name: repoName,
         description,
         private: false,

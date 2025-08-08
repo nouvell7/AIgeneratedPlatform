@@ -95,9 +95,10 @@ export class DeploymentService {
           projectId,
           status: 'pending',
           platform: config.platform,
-          configuration: JSON.stringify(config), // config 객체를 JSON 문자열로 변환
+          configuration: JSON.stringify(config),
+          logs: '', // Add required logs field
         },
-      }) as unknown as DeploymentRecord; // Cast to new interface
+      }) as unknown as DeploymentRecord;
 
       logger.info('Deployment started', { deploymentId: deployment.id, projectId });
 
@@ -309,7 +310,8 @@ export class DeploymentService {
           projectId,
           status: 'pending',
           platform: targetDeployment.platform,
-          configuration: targetDeployment.configuration, // config 객체를 JSON 문자열로 변환
+          configuration: targetDeployment.configuration,
+          logs: '', // Add required logs field
           isRollback: true,
           rollbackFromId: targetDeploymentId,
         },

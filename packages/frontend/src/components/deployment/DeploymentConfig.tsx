@@ -468,7 +468,7 @@ const DeploymentConfig: React.FC<DeploymentConfigProps> = ({
 
               <button
                 type="submit"
-                disabled={isLoading || (testResult && !testResult.valid)}
+                disabled={isLoading || (testResult ? !testResult.valid : false)}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (

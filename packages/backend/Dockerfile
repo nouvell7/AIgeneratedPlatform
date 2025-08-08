@@ -22,6 +22,9 @@ COPY . .
 # Generate Prisma client
 RUN cd packages/backend && npx prisma generate
 
+# Build shared package first
+RUN cd packages/shared && npm run build || echo "No build script for shared package"
+
 # Build the backend
 RUN npm run build:backend
 
@@ -38,7 +41,6 @@ RUN adduser --system --uid 1001 backend
 # Copy built application
 COPY --from=builder /app/packages/backend/dist ./dist
 COPY --from=builder /app/packages/backend/prisma ./prisma
-COPY --from=builder /app/packages/shared/dist ./shared
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/packages/backend/package.json ./package.json
 

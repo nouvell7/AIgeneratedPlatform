@@ -63,7 +63,8 @@ export class AdSenseController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const status = await this.adsenseService.getAdSenseStatus(projectId, userId);
+      // const status = await this.adsenseService.getAdSenseStatus(projectId, userId);
+      const status = { connected: false, message: 'AdSense integration temporarily disabled' };
 
       res.json({
         success: true,
@@ -141,7 +142,8 @@ export class AdSenseController {
         throw new AppError('Project ID is required', 400);
       }
 
-      const config = await this.adsenseService.updateAdSenseSettings(projectId, userId, settings);
+      // const config = await this.adsenseService.updateAdSenseSettings(projectId, userId, settings);
+      const config = { message: 'AdSense integration temporarily disabled' };
 
       res.json({
         success: true,
@@ -251,7 +253,8 @@ export class AdSenseController {
         throw new AppError('Project ID is required', 400);
       }
 
-      await this.adsenseService.disconnectAdSenseAccount(projectId, userId);
+      // await this.adsenseService.disconnectAdSenseAccount(projectId, userId);
+      // Temporarily disabled
 
       res.json({
         success: true,

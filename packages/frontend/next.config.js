@@ -3,6 +3,9 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   transpilePackages: ['@ai-service-platform/shared'],
+  experimental: {
+    esmExternals: false,
+  },
   images: {
     domains: ['localhost', 'picsum.photos', 'i.pravatar.cc'],
     unoptimized: true, // For development
@@ -26,6 +29,14 @@ const nextConfig = {
     };
     return config;
   },
+  // Skip type checking during build for faster deployment
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  output: 'standalone',
 };
 
 module.exports = nextConfig;

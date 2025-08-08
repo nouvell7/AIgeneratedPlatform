@@ -165,7 +165,7 @@ export const metricsMiddleware = (req: Request, res: Response, next: NextFunctio
   res.end = function(chunk?: any, encoding?: any) {
     const responseTime = Date.now() - startTime;
     metricsCollector.collectRequestMetrics(req, res, responseTime);
-    originalEnd.call(this, chunk, encoding);
+    return originalEnd.call(this, chunk, encoding);
   };
 
   next();

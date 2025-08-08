@@ -105,10 +105,10 @@ const Header: React.FC = () => {
                     aria-haspopup="true"
                   >
                     <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                      {user?.profileImage ? (
+                      {(user as any)?.profileImage ? (
                         <img
-                          src={user.profileImage}
-                          alt={user.username}
+                          src={(user as any).profileImage}
+                          alt={user?.username || 'User'}
                           className="w-8 h-8 rounded-full"
                         />
                       ) : (
